@@ -81,13 +81,20 @@ def score_cmd(all_: bool = typer.Option(False, "--all"), as_json: bool = typer.O
     if as_json:
         typer.echo(json.dumps(summary(rows, a), indent=2, sort_keys=True))
         return
-    typer.echo(f"AS_OF {a}   (growth/breadth/agent = proxy; fit/intent = real)")
-    typer.echo(f"{'account':<16}{'total':>6}{'grow':>6}{'brdth':>6}{'agent':>6}{'fit':>5}{'int':>5}{'sig30':>6}  status")
+    from .config import scoring_config
+    gt = scoring_config()["real"]["gates"]
+    typer.echo(f"AS_OF {a}   FLAG = all REAL gates pass. Points rank only. Synthetic seats/usage are context only.")
+    typer.echo(f"gates: hire30>={gt['min_hiring_30d']}  momentum>={gt['min_momentum_ratio']}x (floor {gt['momentum_floor']}/mo)  "
+               f"employees>={gt['min_employees']}  recent cited>={gt['min_recent_real_cited']}")
+    typer.echo(f"{'account':<14}{'total':>6}{'hire30':>8}{'prior60':>8}{'ratio':>7}{'emp':>7}{'rec30':>6}{'hn90':>5}{'formD':>6}"
+               f"  gates(H M F R)  status")
     for r in rows:
-        st = "FLAG" if r["flagged"] else ("AT RISK" if r["at_risk"] else "")
+        st = "FLAG" if r["flagged"] else ("AT RISK (cooling)" if r["at_risk"] else "")
         if all_ or st:
-            typer.echo(f"{r['account_id']:<16}{r['total']:>6}{r['growth_pts']:>6}{r['breadth_pts']:>6}{r['agent_pts']:>6}"
-                       f"{r['fit_pts']:>5}{r['intent_pts']:>5}{r['real_signals_30d']:>6}  {st}")
+            gs = " ".join("x" if r[k] else "." for k in ("gate_hiring", "gate_momentum", "gate_fit", "gate_recent"))
+            emp = r["employees"] if r["employees"] is not None else "-"
+            typer.echo(f"{r['account_id']:<14}{r['total']:>6}{r['hire_30d']:>8}{r['hire_prior60']:>8}{float(r['momentum_ratio']):>7.2f}"
+                       f"{emp!s:>7}{r['real_signals_30d']:>6}{r['hn_90d']:>5}{r['formd_180d']:>6}  {gs:<15}  {st}")
 
 
 @app.command()
@@ -103,15 +110,17 @@ def explain(account_id: str, db: Optional[Path] = DB, as_of: Optional[str] = ASO
     r, cfg = rows[account_id], scoring_config()
     acct = wh.query("SELECT * FROM accounts WHERE account_id = %(a)s", {"a": account_id})[0]
     typer.echo(f"{acct['account_name']} ({account_id})  AS_OF {a}\nStory: {acct['story_title']}\n  {acct['story_url']}")
-    typer.echo(f"\nComponents (total {r['total']}):")
-    typer.echo(f"  growth  {r['growth_pts']:>3}  [proxy] E0={r['e0']} E1={r['e1']} g={float(r['g']):+.3f}")
-    typer.echo(f"  breadth {r['breadth_pts']:>3}  [proxy] active_w0={r['active_w0']} paid={r['paid_seats']} b={float(r['b']):.3f}")
-    typer.echo(f"  agent   {r['agent_pts']:>3}  [proxy] agent_seats_w0={r['agent_seats_w0']} first_agent={r['first_agent_date']}")
-    typer.echo(f"  fit     {r['fit_pts']:>3}  [real]  employees={r['employees']} last_funding={r['last_funding']}")
-    typer.echo(f"  intent  {r['intent_pts']:>3}  [real]  make/ai roles 30d={r['make_roles']} figma roles 30d={r['figma_roles']}")
+    from .scoring import components, context
+    typer.echo(f"\nREAL components (total {r['total']}/100, ranking only; flag = all gates pass):")
+    for c in components(r, cfg):
+        mark = "-" if c["ok"] is None else ("x" if c["ok"] else " ")
+        typer.echo(f"  [{mark}] {c['name']:<20} {c['pts']:>3} pts  {c['value']}   threshold: {c['threshold']}")
+    typer.echo("\nCONTEXT ONLY (SYNTHETIC stand-ins; never affect the flag):")
+    for c in context(r):
+        typer.echo(f"      {c['name']:<20} {c['pts']:>3} pts  {c['value']}  [proxy]")
     sigs = wh.query("SELECT signal_id, kind, signal_date, title, url FROM signals WHERE account_id = %(a)s AND signal_date <= %(d)s "
                     "ORDER BY signal_date DESC", {"a": account_id, "d": a})
-    typer.echo(f"\nReal signals ({len(sigs)}):")
+    typer.echo(f"\nSignals ({len(sigs)}):")
     for s in sigs[:25]:
         typer.echo(f"  {s['signal_date']}  {s['kind']:<13} {s['signal_id']}\n      {s['title']}\n      {s['url']}")
     if len(sigs) > 25:
@@ -120,13 +129,6 @@ def explain(account_id: str, db: Optional[Path] = DB, as_of: Optional[str] = ASO
     for w in wh.query("SELECT * FROM proxy_weeks WHERE account_id = %(a)s ORDER BY week_end", {"a": account_id}):
         typer.echo(f"  week ending {w['week_end']}  mult={w['multiplier']:+.2f} active={w['active_seats']} make={w['make_events']} "
                    f"agent={w['agent_events']}  drivers={w['driver_signal_ids'] or '-'}")
-    f = cfg["flag"]
-    typer.echo("\nFlag clauses:")
-    for name, ok in [(f"total {r['total']} >= {f['min_total']}", r["total"] >= f["min_total"]),
-                     (f"growth_pts {r['growth_pts']} >= {f['min_growth']}", r["growth_pts"] >= f["min_growth"]),
-                     (f"fit_pts {r['fit_pts']} >= {f['min_fit']}", r["fit_pts"] >= f["min_fit"]),
-                     (f"real_signals_30d {r['real_signals_30d']} >= {f['min_real_signals']}", r["real_signals_30d"] >= f["min_real_signals"])]:
-        typer.echo(f"  [{'x' if ok else ' '}] {name}")
     typer.echo(f"  => {'FLAGGED' if r['flagged'] else 'not flagged'}{' / AT RISK' if r['at_risk'] else ''}")
 
 

@@ -37,11 +37,25 @@ def windows(as_of: dt.date) -> dict[str, dt.date]:
 
 def score_params(as_of: dt.date, cfg: dict | None = None) -> dict:
     cfg = cfg or scoring_config()
+    r = cfg["real"]
     p: dict = dict(windows(as_of))
     p["ga_date"] = dt.date.fromisoformat(str(cfg["ga_date"]))
-    p["intent_start"] = as_of - dt.timedelta(days=int(cfg["intent"]["window_days"]))
-    p["funding_cutoff"] = as_of - dt.timedelta(days=int(cfg["fit"]["funding_days"]))
-    for section in ("growth", "breadth", "agent", "fit", "intent", "flag", "at_risk"):
-        for k, v in cfg[section].items():
-            p[f"{section}_{k}"] = v
+    p["win_start"] = as_of - dt.timedelta(days=int(r["window_days"]))          # exclusive lower bound of the 30d window
+    p["prior_start"] = as_of - dt.timedelta(days=int(r["window_days"]) + int(r["prior_days"]))
+    p["prior_months"] = int(r["prior_days"]) / int(r["window_days"])
+    p["intent_start"] = as_of - dt.timedelta(days=int(r["intent_days"]))
+    p["funding_cutoff"] = as_of - dt.timedelta(days=int(r["funding_days"]))
+    for k, v in r["gates"].items():
+        p[f"gate_{k}"] = v
+    pts = r["points"]
+    for k in ("hiring_per_post", "hiring_post_cap", "hiring_make_bonus"):
+        p[k] = pts[k]
+    for sec in ("momentum", "fit", "intent"):
+        for k, v in pts[sec].items():
+            p[f"{sec}_{k}"] = v
+    for k, v in r["cooling"].items():
+        p[f"cooling_{k}"] = v
+    for sec, d in cfg["context"].items():
+        for k, v in d.items():
+            p[f"{sec}_{k}"] = v
     return p

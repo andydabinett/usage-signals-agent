@@ -23,19 +23,13 @@ table{border-collapse:collapse}td,th{padding:2px 8px;text-align:left;border-bott
 {% if demo %}<div style="background:#b00020;color:#fff;padding:10px 14px;font-weight:bold;border-radius:6px">SYNTHETIC DEMO SCENARIO: one synthetic spike was injected on {{ demo_accounts|join(', ') }}. Rows marked SYNTHETIC are not real. See README "Live result vs demo scenario".</div>{% endif %}
 <h1>Usage Signals Agent{% if demo %} (SYNTHETIC demo scenario){% else %} (live){% endif %}</h1>
 <div class="sub">Snapshot date (AS_OF): <b>{{ as_of }}</b> · Accounts: real public companies from Figma customer stories ·
-Seats and usage are a <b>synthetic proxy</b> seeded from real signal dates.</div>
+The flag is decided by <b>real public signals only</b>. Seats and usage are a <b>synthetic stand-in</b> shown for context; they never change a flag.</div>
 <div class="legend"><span><i class="sw real"></i>Real public signal</span><span><i class="sw proxy"></i>Synthetic proxy</span></div>
 <h2>Flagged ({{ flagged|length }})</h2>
 {% for r in flagged %}<div class="card"><b>{{ r.account_name }}</b> <code>{{ r.account_id }}</code> — total <b>{{ r.total }}</b>/100
-<div class="bar" title="growth (proxy) · breadth (proxy) · agent (proxy) · fit (real) · intent (real)">
-<div class="proxy" style="width:{{ r.growth_pts }}%"></div><div class="proxy" style="width:{{ r.breadth_pts }}%;opacity:.75"></div>
-<div class="proxy" style="width:{{ r.agent_pts }}%;opacity:.55"></div><div class="real" style="width:{{ r.fit_pts }}%"></div>
-<div class="real" style="width:{{ r.intent_pts }}%;opacity:.7"></div></div>
-<table><tr><th>Usage growth WoW</th><td>{{ r.growth_pts }} pts ({{ (r.g*100)|round|int }}%)<span class="badge">proxy</span></td>
-<th>Seat breadth</th><td>{{ r.breadth_pts }} pts ({{ r.active_w0 }}/{{ r.paid_seats }})<span class="badge">proxy</span></td></tr>
-<tr><th>Agent adoption</th><td>{{ r.agent_pts }} pts ({{ r.agent_seats_w0 }} seats)<span class="badge">proxy</span></td>
-<th>Fit</th><td>{{ r.fit_pts }} pts ({{ r.employees or 'unknown' }} employees)<span class="rbadge">real</span></td></tr>
-<tr><th>Public intent</th><td colspan=3>{{ r.intent_pts }} pts ({{ r.make_roles }} Make/AI roles, {{ r.figma_roles }} Figma roles, 30d)<span class="rbadge">real</span></td></tr></table>
+<table><tr><th>REAL component</th><th>pts</th><th>value</th><th>threshold</th><th>gate</th></tr>
+{% for c in r.components %}<tr><td>{{ c.name }}<span class="rbadge">real</span></td><td>{{ c.pts }}</td><td>{{ c.value }}</td><td>{{ c.threshold }}</td><td>{{ '-' if c.ok is none else ('PASS' if c.ok else 'fail') }}</td></tr>{% endfor %}
+{% for c in r.context %}<tr style="opacity:.7"><td>{{ c.name }}<span class="badge">synthetic stand-in</span></td><td>{{ c.pts }}</td><td>{{ c.value }}</td><td colspan=2>context only, never affects the flag</td></tr>{% endfor %}</table>
 <p><b>Signals</b>:</p><ul>{% for s in r.signals %}<li>{% if s.is_synthetic %}<b style="color:#b00020">SYNTHETIC</b> · {% endif %}{{ s.signal_date }} · {{ s.kind }} · <a href="{{ s.url }}">{{ s.title }}</a></li>{% endfor %}</ul>
 {% if r.handoff %}<div class="h"><b>{{ r.handoff.output.addressed_to }}</b><br>
 <b>Why this account:</b> {{ r.handoff.output.why_this_account }}<br><b>Why now:</b> {{ r.handoff.output.why_now }}<br>
@@ -44,14 +38,23 @@ Seats and usage are a <b>synthetic proxy</b> seeded from real signal dates.</div
 {% for c in r.handoff.output.citations %}[{{ c.n }}] <a href="{{ c.url }}">{{ c.url }}</a><br>{% endfor %}
 <small>mode: {{ r.handoff.mode }} · grounding: {{ 'pass' if r.handoff.grounding.ok else 'FAIL' }}</small></div>
 {% else %}<p><i>No cached handoff.</i></p>{% endif %}</div>{% endfor %}
-<h2>At risk ({{ at_risk|length }})</h2><ul>{% for r in at_risk %}<li>{{ r.account_name }} — WoW {{ (r.g*100)|round|int }}%<span class="badge">proxy</span></li>{% else %}<li>None</li>{% endfor %}</ul>
-<h2>All accounts</h2><table><tr><th>account</th><th>total</th><th>growth<span class="badge">proxy</span></th><th>breadth<span class="badge">proxy</span></th><th>agent<span class="badge">proxy</span></th><th>fit<span class="rbadge">real</span></th><th>intent<span class="rbadge">real</span></th><th>real signals 30d</th></tr>
-{% for r in rows %}<tr><td>{{ r.account_name }}{% if r.account_id in demo_accounts %} <b style="color:#b00020">SYNTHETIC spike</b>{% endif %}</td><td>{{ r.total }}</td><td>{{ r.growth_pts }}</td><td>{{ r.breadth_pts }}</td><td>{{ r.agent_pts }}</td><td>{{ r.fit_pts }}</td><td>{{ r.intent_pts }}</td><td>{{ r.real_signals_30d }}</td></tr>{% endfor %}</table>
+<h2>At risk: real hiring cooled ({{ at_risk|length }})</h2><ul>{% for r in at_risk %}<li>{{ r.account_name }}: {{ r.hire_prior60 }} qualifying posts in the prior 60d, {{ r.hire_30d }} in the last 30d<span class="rbadge">real</span></li>{% else %}<li>None</li>{% endfor %}</ul>
+<h2>All accounts</h2><p class="sub">Gates: {{ gates }}</p>
+<table><tr><th>account</th><th>total</th><th>hiring</th><th>momentum</th><th>fit</th><th>recent</th><th>intent</th><th>flag</th><th>context (synthetic): growth / breadth / agent</th></tr>
+{% for r in rows %}<tr><td>{{ r.account_name }}{% if r.account_id in demo_accounts %} <b style="color:#b00020">SYNTHETIC spike</b>{% endif %}</td><td>{{ r.total }}</td>
+{% for c in r.components %}<td title="{{ c.value }} | threshold {{ c.threshold }}">{{ c.pts }} {{ '' if c.ok is none else ('PASS' if c.ok else 'fail') }}<br><small>{{ c.value }}</small></td>{% endfor %}
+<td>{{ 'FLAG' if r.flagged else '' }}</td><td style="opacity:.7">{{ r.growth_pts }} / {{ r.breadth_pts }} / {{ r.agent_pts }}<span class="badge">synthetic</span></td></tr>{% endfor %}</table>
 <p class="sub">No personal data. Contacts are public role titles only. owner_rep is always NULL (D9).</p>
 </body></html>"""
 
 
 def render(wh, rows: list[dict], as_of, out_path: Path) -> Path:
+    from .config import scoring_config
+    from .scoring import components, context
+    g = scoring_config()["real"]["gates"]
+    gates = (f"hiring >= {g['min_hiring_30d']} posts/30d; momentum ratio >= {g['min_momentum_ratio']} (floor {g['momentum_floor']}/mo); "
+             f"employees >= {g['min_employees']}; >= {g['min_recent_real_cited']} real cited signal in 30d")
+    rows = [dict(r, components=components(r), context=context(r)) for r in rows]
     flagged = []
     for r in rows:
         if not r["flagged"]:
@@ -65,7 +68,7 @@ def render(wh, rows: list[dict], as_of, out_path: Path) -> Path:
     demo = mode_of(wh) == "demo"
     demo_accounts = [r["account_id"] for r in wh.query("SELECT DISTINCT account_id FROM signals WHERE is_synthetic")] if demo else []
     html = Environment(autoescape=True).from_string(TPL).render(
-        demo=demo, demo_accounts=demo_accounts, as_of=as_of, rows=rows, flagged=flagged, at_risk=[r for r in rows if r["at_risk"]])
+        demo=demo, demo_accounts=demo_accounts, gates=gates, as_of=as_of, rows=rows, flagged=flagged, at_risk=[r for r in rows if r["at_risk"]])
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(html)
     return out_path

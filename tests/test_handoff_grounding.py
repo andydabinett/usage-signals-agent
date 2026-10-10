@@ -14,7 +14,7 @@ FACTS = {
     "customer_story": {"url": "https://www.figma.com/customers/acme-story/", "title": "How Acme ships faster", "products_mentioned": "Make"},
     "score": {"total": 72, "growth_pts": 25, "breadth_pts": 12, "agent_pts": 20, "fit_pts": 10, "intent_pts": 15,
               "real": {"figma_make_or_ai_roles_30d": 1, "figma_roles_30d": 2, "real_signals_30d": 3},
-              "proxy": {"weekly_events_w0": 410, "weekly_events_w1": 300, "wow_growth_pct": 37, "active_seats_w0": 14,
+              "synthetic_stand_in_context_only": {"weekly_events_w0": 410, "weekly_events_w1": 300, "wow_growth_pct": 37, "active_seats_w0": 14,
                         "paid_seats": 20, "agent_seats_w0": 4}},
     "enrichment": {"employees": 850, "industry": "software", "country": "United States"},
     "sources": [{"signal_id": "story:acme", "kind": "story", "date": None, "title": "How Acme ships faster", "url": "https://www.figma.com/customers/acme-story/"},
@@ -28,7 +28,7 @@ FACTS = {
 GOOD = {
     "addressed_to": ho.ADDRESSED_TO,
     "why_this_account": "Acme Design is in a public Figma customer story about Figma Make [1].",
-    "why_now": "On Oct 2 it posted a Senior Product Designer role that mentions Figma Make [2]. Weekly events grew 37% (proxy) [2].",
+    "why_now": "On Oct 2 it posted a Senior Product Designer role that mentions Figma Make [2]. Weekly events grew 37% (synthetic stand-in) [2].",
     "who_to_contact": [{"role_title": "Head of Design", "source_url": "https://www.figma.com/customers/acme-story/", "angle": "Agent rollout for prototyping"}],
     "suggested_first_line": "Noticed your team is hiring for Figma Make skills.",
     "citations": [{"n": 1, "signal_id": "story:acme", "url": "https://www.figma.com/customers/acme-story/"},
@@ -47,7 +47,7 @@ def test_good_passes():
 
 
 def test_invented_number_rejected():
-    rep = ho.check(mutate(why_now="Usage is up 35% (proxy) [2]."), FACTS)
+    rep = ho.check(mutate(why_now="Usage is up 35% (synthetic stand-in) [2]."), FACTS)
     assert not rep["ok"] and any("35%" in e for e in rep["errors"])
 
 
@@ -58,7 +58,7 @@ def test_uncited_sentence_rejected():
 
 def test_unlabeled_proxy_number_rejected():
     rep = ho.check(mutate(why_now="Weekly events grew 37% [2]."), FACTS)
-    assert not rep["ok"] and any("proxy" in e for e in rep["errors"])
+    assert not rep["ok"] and any("synthetic stand-in" in e for e in rep["errors"])
 
 
 def test_url_not_in_facts_rejected():

@@ -45,7 +45,7 @@ Rules (enforced by code; violations are rejected):
 - Total under {MAX_WORDS} words across why_this_account, why_now, suggested_first_line and angles.
 - Every sentence in why_this_account and why_now ends with a citation like [1] whose n maps to an entry in `citations`;
   each citation's signal_id and url must be copied exactly from facts.sources.
-- Use only numbers that appear in the facts. Any number from facts.score.proxy must be followed by "(proxy)".
+- Use only numbers that appear in the facts. Any number from facts.score.synthetic_stand_in_context_only must be followed by "(synthetic stand-in)"; those numbers are context only and are never the reason an account was flagged.
 - who_to_contact: 1-2 entries copied exactly from facts.contacts (role_title + source_url). Never name individuals.
 - No emails, phone numbers or person names. Do not claim the account is a Figma customer beyond what its story shows.
 - numbers_cited lists every number you used, as written.
@@ -76,17 +76,20 @@ def build_facts(wh, account_id: str, as_of: dt.date) -> dict:
                    "AND COALESCE(published_on, updated_on) > %(lo)s AND COALESCE(published_on, updated_on) <= %(d)s",
                    {"a": account_id, "lo": as_of - dt.timedelta(days=30), "d": as_of})[0]
     sn, smk, sfg = int(syn["n"] or 0), int(syn["mk"] or 0), int(syn["fg"] or 0)
+    sfg_all = sn  # every synthetic post is a qualifying post
     return {
         "account_id": account_id, "account_name": acct["account_name"], "as_of": as_of.isoformat(),
         "mode": "demo" if demo else "live",
         "addressed_to": DEMO_ADDRESSED_TO if demo else ADDRESSED_TO,
         "customer_story": {"url": acct["story_url"], "title": acct["story_title"], "products_mentioned": acct["products_mentioned"]},
-        "score": {"total": int(row["total"]), "growth_pts": int(row["growth_pts"]), "breadth_pts": int(row["breadth_pts"]),
-                  "agent_pts": int(row["agent_pts"]), "fit_pts": int(row["fit_pts"]), "intent_pts": int(row["intent_pts"]),
-                  "real": {"figma_make_or_ai_roles_30d": int(row["make_roles"]) - smk, "figma_roles_30d": int(row["figma_roles"]) - sfg,
-                           "real_signals_30d": int(row["real_signals_30d"]) - sn},
+        "score": {"total": int(row["total"]),
+                  "real": {"hiring_pts": int(row["hiring_pts"]), "momentum_pts": int(row["momentum_pts"]),
+                           "fit_pts": int(row["fit_pts"]), "intent_pts": int(row["intent_pts"]),
+                           "ai_design_posts_30d": int(row["hire_30d"]) - sfg_all, "make_ai_agent_posts_30d": int(row["hire_make_30d"]) - smk,
+                           "ai_design_posts_prior_60d": int(row["hire_prior60"]),
+                           "real_signals_30d": int(row["real_signals_30d"])},
                   **({"synthetic_signals_30d": sn} if sn else {}),
-                  "proxy": {"weekly_events_w0": int(row["e0"]), "weekly_events_w1": int(row["e1"]),
+                  "synthetic_stand_in_context_only": {"weekly_events_w0": int(row["e0"]), "weekly_events_w1": int(row["e1"]),
                             "wow_growth_pct": int(round(g * 100)), "active_seats_w0": int(row["active_w0"]),
                             "paid_seats": int(row["paid_seats"]), "agent_seats_w0": int(row["agent_seats_w0"])}},
         "enrichment": {k: enr.get(k) for k in ("employees", "industry", "country")},
@@ -133,7 +136,7 @@ def allowed_numbers(facts: dict) -> tuple[set[str], set[str]]:
     real: set[str] = set()
     proxy: set[str] = set()
     f2 = json.loads(json.dumps(facts, default=str))
-    _walk_numbers(f2["score"].pop("proxy"), proxy)
+    _walk_numbers(f2["score"].pop("synthetic_stand_in_context_only"), proxy)
     _walk_numbers(f2, real)
     return real | proxy, proxy - real
 
@@ -224,8 +227,8 @@ def check(out: dict, facts: dict) -> dict:
         tok = _norm_num(m.group(0))
         if tok not in allowed:
             errors.append(f"number not in facts allow-list: {m.group(0)}")
-        elif tok in proxy_only and "(proxy)" not in scrubbed[m.end(): m.end() + 40]:
-            errors.append(f"proxy number not labeled (proxy): {m.group(0)}")
+        elif tok in proxy_only and "(synthetic stand-in)" not in scrubbed[m.end(): m.end() + 40]:
+            errors.append(f"synthetic stand-in number not labeled (synthetic stand-in): {m.group(0)}")
     roles = {(c["role_title"], c["source_url"]) for c in facts["contacts"]}
     for w in out.get("who_to_contact", []):
         if (w["role_title"], w["source_url"]) not in roles:
