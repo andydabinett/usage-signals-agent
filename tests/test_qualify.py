@@ -76,3 +76,12 @@ def test_scoring_counts_deduped_qualifying_posts_and_date_basis():
     assert "updated 2026-10-05" in t["why_now"] and ho.check(t, facts)["ok"]
     bad = dict(t, why_now="A UX Designer role was posted on 2026-10-05 [2].")
     assert any("updated on" in e for e in ho.check(bad, facts)["errors"])
+
+
+def test_dedupe_ignores_word_order_and_punctuation():
+    assert q.norm_title("Senior Designer, Digital") == q.norm_title("Senior Digital Designer")
+    rows = [{"signal_id": "a", "account_id": "adyen", "title": "Senior Designer, Digital", "url": "u1", "d": dt.date(2026, 10, 1)},
+            {"signal_id": "b", "account_id": "adyen", "title": "Senior Digital Designer", "url": "u2", "d": dt.date(2026, 10, 7)},
+            {"signal_id": "c", "account_id": "adyen", "title": "Senior Digital Product Designer", "url": "u3", "d": dt.date(2026, 10, 7)}]
+    out = q.dedupe(rows)
+    assert out["a"]["dup_urls"] == ["u1", "u2"] and out["b"]["dup_of"] == "a" and out["c"]["dup_of"] is None

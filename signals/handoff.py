@@ -14,7 +14,7 @@ ADDRESSED_TO = "For: PLG / unowned queue (demo)"
 DEMO_ADDRESSED_TO = "SYNTHETIC DEMO SCENARIO. For: PLG / unowned queue (demo)"
 DEFAULT_MODEL = "anthropic/claude-sonnet-5.5"
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-KIND_RANK = {"job_make": 0, "funding": 1, "news_funding": 2, "job_figma": 3, "news_launch": 4, "hn": 5, "news_layoffs": 6}
+KIND_RANK = {"job_agent_design": 0, "job_make": 0, "funding": 1, "news_funding": 2, "job_figma": 3, "news_launch": 4, "hn": 5, "news_layoffs": 6}
 KIND_LABEL = {"job_agent_design": "design job post for AI agents", "job_make": "job post mentioning Figma Make / AI prototyping", "job_figma": "job post mentioning Figma",
               "funding": "SEC Form D funding filing", "news_funding": "funding news", "news_launch": "launch news",
               "news_layoffs": "layoffs news", "hn": "Hacker News mention", "story": "Figma customer story"}
@@ -44,6 +44,11 @@ Rules (enforced by code; violations are rejected):
 - Any sentence citing a source with "synthetic": true must contain the word SYNTHETIC.
 - Each source has date_basis: "published" (first-published date) or "updated" (only an updated date is known). If you state the
   date of a source whose date_basis is "updated", say "updated on <date>", never "posted on".
+- Each claim must be supported by the source it cites: Figma/design-system claims cite the customer-story source; headcount cites the
+  employees source. If one sentence makes both claims, cite both, e.g. "[1][4]".
+- Every digit in a cited sentence must appear in a source cited BY THAT SENTENCE (e.g. cite the employees source for a headcount).
+- If facts.lead_with is non-empty, why_now must START by citing those sources (agent-design / Figma Make roles), before any other
+  signal; and if any of them is kind job_agent_design, suggested_first_line must be about designing for AI agents (say "AI agents").
 - A source with also_posted_at is ONE role listed at several URLs; count it as one role.
 - Total under {MAX_WORDS} words across why_this_account, why_now, suggested_first_line and angles.
 - Every sentence in why_this_account and why_now ends with a citation like [1] whose n maps to an entry in `citations`;
@@ -61,7 +66,7 @@ Rules (enforced by code; violations are rejected):
 def build_facts(wh, account_id: str, as_of: dt.date) -> dict:
     row = next(r for r in score(wh, as_of) if r["account_id"] == account_id)
     acct = wh.query("SELECT * FROM accounts WHERE account_id = %(a)s", {"a": account_id})[0]
-    enr = (wh.query("SELECT employees, industry, country FROM enrichment WHERE account_id = %(a)s", {"a": account_id}) or [{}])[0]
+    enr = (wh.query("SELECT employees, industry, country, employees_source, employees_source_url FROM enrichment WHERE account_id = %(a)s", {"a": account_id}) or [{}])[0]
     from .demo import mode_of
     demo = mode_of(wh) == "demo"
     sigs = wh.query("SELECT signal_id, kind, signal_date, title, url, is_synthetic, date_basis, dup_urls FROM signals WHERE account_id = %(a)s AND url IS NOT NULL "
@@ -75,6 +80,11 @@ def build_facts(wh, account_id: str, as_of: dt.date) -> dict:
                  "date_basis": s["date_basis"],
                  **({"also_posted_at": [u for u in s["dup_urls"].split() if u != s["url"]]}
                     if s["dup_urls"] and len(s["dup_urls"].split()) > 1 else {})} for s in top]
+    if enr.get("employees") is not None and enr.get("employees_source_url") and enr.get("employees_source") in ("wikidata", "manual_public"):
+        sources.append({"signal_id": f"employees:{account_id}", "kind": "employees", "date": None,
+                        "title": f"Employee count: {enr['employees']:,} ({enr['employees_source']})", "url": enr["employees_source_url"],
+                        "value": int(enr["employees"])})
+    lead_with = [x["signal_id"] for x in sources if x["kind"] in ("job_agent_design", "job_make")]
     contacts = wh.query("SELECT role_title, source_url FROM contacts WHERE account_id = %(a)s ORDER BY role_title", {"a": account_id})[:2]
     g = float(row["g"])
     syn = wh.query("SELECT COUNT(*) AS n, SUM(CASE WHEN mentions_figma_make OR mentions_ai_prototyping THEN 1 ELSE 0 END) AS mk, "
@@ -99,7 +109,7 @@ def build_facts(wh, account_id: str, as_of: dt.date) -> dict:
                             "wow_growth_pct": int(round(g * 100)), "active_seats_w0": int(row["active_w0"]),
                             "paid_seats": int(row["paid_seats"]), "agent_seats_w0": int(row["agent_seats_w0"])}},
         "enrichment": {k: enr.get(k) for k in ("employees", "industry", "country")},
-        "sources": sources, "contacts": contacts,
+        "sources": sources, "contacts": contacts, "lead_with": lead_with,
     }
 
 
@@ -220,6 +230,29 @@ def check(out: dict, facts: dict) -> dict:
                 if any(cmap.get(int(n)) in synth for n in CITE_RX.findall(sent)) and "SYNTHETIC" not in sent:
                     errors.append(f"sentence cites a synthetic source without the SYNTHETIC label: {sent!r}")
     cites = {c["n"]: c for c in out.get("citations", [])}
+    by_id = {x["signal_id"]: x for x in facts["sources"]}
+    _, proxy_only0 = allowed_numbers(facts)
+    for field in ("why_this_account", "why_now"):
+        for sent in sentences(out.get(field, "")):
+            cited = [by_id[cites[int(n)]["signal_id"]] for n in CITE_RX.findall(sent)
+                     if int(n) in cites and cites[int(n)]["signal_id"] in by_id]
+            nums: set[str] = set()
+            _walk_numbers(json.loads(json.dumps(cited, default=str)), nums)
+            sc = CITE_RX.sub(" ", sent)
+            for m in NUM_RX.finditer(sc):
+                tok = _norm_num(m.group(0))
+                if tok in proxy_only0 and "(synthetic stand-in)" in sc[m.end(): m.end() + 40]:
+                    continue
+                if tok not in nums:
+                    errors.append(f"number {m.group(0)} not in the source(s) cited by its sentence: {sent!r}")
+    lead = facts.get("lead_with") or []
+    if lead:
+        first = CITE_RX.findall(out.get("why_now", ""))
+        if not first or cites.get(int(first[0]), {}).get("signal_id") not in lead:
+            errors.append("why_now must lead with an agent-design / Figma Make source (facts.lead_with)")
+        if any(by_id[x]["kind"] == "job_agent_design" for x in lead if x in by_id) and \
+                not re.search(r"\bAI agents?\b|\bagentic\b", out.get("suggested_first_line", ""), re.I):
+            errors.append("suggested_first_line must speak to designing for AI agents")
     for c in cites.values():
         if c["signal_id"] not in src:
             errors.append(f"citation [{c['n']}] signal_id not in facts: {c['signal_id']}")
@@ -265,19 +298,23 @@ def template(facts: dict) -> dict:
     real = sorted([s for s in srcs[1:] if s.get("date")], key=lambda s: s["date"])
     cits = [{"n": 1, "signal_id": story["signal_id"], "url": story["url"]}]
     why_now = ""
-    why_acct = f"{facts['account_name']} is featured in a public Figma customer story [1]."
+    why_acct = f"{facts['account_name']} documents its Figma use publicly in \"{story['title']}\" [1]."
     if real:
-        top = real[-1]  # newest dated source
+        lead = [x for x in real if x["signal_id"] in (facts.get("lead_with") or [])]
+        top = (lead or real)[-1]  # newest agent-design / Make source first, else newest dated source
         cits.append({"n": 2, "signal_id": top["signal_id"], "url": top["url"]})
         verb = "updated" if top.get("date_basis") == "updated" else "dated"
-        why_now = f"Latest public signal: {KIND_LABEL.get(top['kind'], top['kind'])} {verb} {top['date']} [2]."
+        why_now = f"{'Lead' if top['signal_id'] in (facts.get('lead_with') or []) else 'Latest'} public signal: {KIND_LABEL.get(top['kind'], top['kind'])} {verb} {top['date']} [2]."
     else:
         why_now = "No dated public signal beyond the customer story [1]."
     who = [{"role_title": c["role_title"], "source_url": c["source_url"], "angle": "Figma agent rollout"} for c in facts["contacts"][:2]]
-    if top_synth := (real and real[-1].get("synthetic")):
+    agentic = any(x["kind"] == "job_agent_design" for x in srcs if x["signal_id"] in (facts.get("lead_with") or []))
+    first_line = ("Saw you're hiring designers for AI agents; curious how the new Figma agent fits that work." if agentic else
+                  "Saw your team's public Figma story and recent hiring; curious how the new Figma agent fits.")
+    if real and top.get("synthetic"):
         why_now = "SYNTHETIC demo signal: " + why_now
     return {"addressed_to": facts.get("addressed_to", ADDRESSED_TO), "why_this_account": why_acct, "why_now": why_now, "who_to_contact": who,
-            "suggested_first_line": "Saw your team's public Figma story and recent hiring; curious how the new Figma agent fits.",
+            "suggested_first_line": first_line,
             "citations": cits, "numbers_cited": []}
 
 

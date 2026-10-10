@@ -27,8 +27,10 @@ RX_AGENT_TITLE = re.compile(r"\bagent(s|ic)?\b", re.I)
 
 
 def norm_title(t: str | None) -> str:
+    """Normalized title = the sorted SET of words (lowercase, punctuation and parentheticals removed), so word order
+    and punctuation are ignored: 'Senior Designer, Digital' == 'Senior Digital Designer'."""
     t = re.sub(r"\(.*?\)", " ", (t or "").lower())
-    return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9]+", " ", t)).strip()
+    return " ".join(sorted(set(re.sub(r"[^a-z0-9]+", " ", t).split())))
 
 
 def is_design_role(title: str | None) -> bool:

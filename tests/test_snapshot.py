@@ -30,4 +30,4 @@ def test_every_flag_has_recent_real_job_or_funding_signal():
         sigs = wh.query("SELECT kind, url FROM signals WHERE account_id = %(a)s AND url IS NOT NULL AND signal_date >= %(s)s "
                         "AND signal_date <= %(d)s", {"a": aid, "s": a - dt.timedelta(days=30), "d": a})
         assert sigs, aid
-        assert any(s["kind"] in ("job_make", "job_figma", "funding") for s in sigs), aid
+        assert any(s["kind"] in ("job_make", "job_figma", "job_agent_design", "funding") for s in sigs), aid

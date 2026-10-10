@@ -133,5 +133,36 @@ def test_build_facts_sorts_sources_by_date(fixture_db):
     import datetime as dt
     from signals.warehouse import open_wh
     facts = ho.build_facts(open_wh(fixture_db, read_only=True), "acme", dt.date(2026, 10, 10))
-    dates = [s["date"] for s in facts["sources"][1:]]
+    dates = [s["date"] for s in facts["sources"][1:] if s["kind"] != "employees"]
     assert dates == sorted(dates) and facts["sources"][0]["kind"] == "story"
+
+
+def _emp_facts():
+    import copy
+    f = copy.deepcopy(FACTS)
+    f["sources"].append({"signal_id": "employees:acme", "kind": "employees", "date": None, "title": "Employee count: 850 (manual_public)",
+                         "url": "https://sec.example/10k", "value": 850})
+    return f
+
+
+def test_number_must_be_in_the_source_it_is_cited_to():
+    f = _emp_facts()
+    cits = _cits() + [{"n": 4, "signal_id": "employees:acme", "url": "https://sec.example/10k"}]
+    bad = mutate(why_this_account="Acme Design has 850 employees [1].", citations=cits)  # 850 is in facts, but not in [1]
+    assert any("not in the source" in e for e in ho.check(bad, f)["errors"])
+    ok = mutate(why_this_account="Acme Design has 850 employees [4].", citations=cits)
+    assert not any("not in the source" in e for e in ho.check(ok, f)["errors"])
+
+
+def test_why_now_must_lead_with_agent_or_make_source_and_first_line_agents():
+    import copy
+    f = copy.deepcopy(FACTS)
+    f["sources"][1] = dict(f["sources"][1], kind="job_agent_design", title="Product Designer, AI Agents")
+    f["lead_with"] = ["job:greenhouse:90"]
+    bad = mutate(why_now="Acme posted a Senior Product Designer role on 2026-10-02 [2].", citations=_cits())
+    errs = ho.check(bad, f)["errors"]
+    assert any("lead with" in e for e in errs) and any("AI agents" in e for e in errs)
+    good = mutate(why_now="Acme posted a Product Designer, AI Agents role on 2026-08-05 [3].", citations=_cits(),
+                  suggested_first_line="Saw you're hiring to design for AI agents; how does Figma fit?")
+    errs = ho.check(good, f)["errors"]
+    assert not any("lead with" in e or "AI agents" in e for e in errs), errs

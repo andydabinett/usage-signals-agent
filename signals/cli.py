@@ -60,10 +60,27 @@ def freeze(db: Path = typer.Option(DATA_DB, "--db")):
     meta = wh.query("SELECT source_counts FROM snapshot_meta")[0]
     wh.execute("UPDATE snapshot_meta SET frozen_at = %(t)s, git_sha = %(g)s",
                {"t": dt.datetime.now(dt.timezone.utc).replace(tzinfo=None), "g": sha})
-    new = {**summary(score(wh, a), a), "source_counts": json.loads(meta["source_counts"] or "{}")}
+    rows = score(wh, a)
+    new = {**summary(rows, a), "source_counts": json.loads(meta["source_counts"] or "{}")}
     wh.close()
     SNAPSHOT_DB.parent.mkdir(exist_ok=True)
-    shutil.copyfile(db, SNAPSHOT_DB)
+    # Compact, git-friendly snapshot: raw_pulls bodies (already email-redacted at ingest) are cut to 2,000 chars; sha256 of the
+    # full body is kept for provenance. Cached handoffs are kept only for flagged accounts.
+    import duckdb
+    tmp = SNAPSHOT_DB.with_suffix(".tmp.duckdb")
+    for f in (tmp, SNAPSHOT_DB):
+        if f.exists():
+            f.unlink()
+    shutil.copyfile(db, tmp)
+    con = duckdb.connect(str(tmp))
+    con.execute("UPDATE raw_pulls SET body = substr(body, 1, 2000)")
+    flagged = [r["account_id"] for r in rows if r["flagged"]]
+    con.execute("DELETE FROM handoffs WHERE NOT list_contains(?, account_id)", [flagged])
+    con.execute(f"ATTACH '{SNAPSHOT_DB}' AS snap")
+    src = con.execute("SELECT current_database()").fetchone()[0]
+    con.execute(f"COPY FROM DATABASE {src} TO snap")
+    con.close()
+    tmp.unlink()
     EXPECTED_JSON.write_text(json.dumps(new, indent=2, sort_keys=True) + "\n")
     for k in ("flagged", "at_risk"):
         if old.get(k) != new[k]:
