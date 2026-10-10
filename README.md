@@ -1,12 +1,44 @@
 # Usage Signals Agent
 
-Real public signals → warehouse-first, rules-only scoring → short **cited** sales handoffs, on **real public companies**
-that appear in Figma's own customer stories. Seats and usage are a **clearly labeled synthetic proxy** (no public usage data exists).
+**Live demo:** `<LIVE_LINK_PLACEHOLDER>` (live view at `/`, labeled SYNTHETIC demo scenario at `/demo`)
 
-> Demo story: *"The Figma agent went GA on Oct 6. Which real companies show public intent, and what would a rep say, with receipts?"*
+**The pitch.** Figma's agent went GA on Oct 6, and the best expansion conversations start from evidence the customer already put in public.
+This agent watches real public signals for companies that publicly document their Figma use: design and AI-agent hiring on Greenhouse,
+Lever and Ashby, hiring momentum against the prior 60 days, real headcount from 10-Ks and Wikidata, and HN and SEC Form D intent. It scores
+them with transparent, rules-only SQL. Every sub-score is shown next to its threshold. It then writes a short sales handoff where every
+sentence is cited and machine-checked against its source. Seats and usage are synthetic stand-ins (no public usage data exists), so they are
+shown as context, labeled, and can never flip a flag. On the frozen Oct 10 snapshot it flags **Okta** (hiring designers for AI agents),
+**Affirm** and **Zapier**, and marks **Brex** as cooling.
 
 **Status:** private repo, nothing deployed. `snapshot/` was **frozen on Oct 10, 2026** (as_of 2026-10-10) after Chief of Staff - Coding
 approved the manual review. Flagged: **Okta, Affirm, Zapier**; at risk: **Brex**. All offline commands default to the snapshot.
+
+## Why this, for this role
+
+Figma's [Marketing Engineer, AI Deployment posting](https://boards.greenhouse.io/figma/jobs/6013495004) measures success by "agents live," "hours saved," and "revenue driven — pipeline, conversion lift, or deal velocity directly attributable to what you've built." This repo targets revenue driven, using the stack Kyle Ketchum has described publicly:
+
+- **Warehouse-first signals.** In the [Clay customer story](https://www.clay.com/customers/figma), product signals like "seat growth, feature adoption, and component usage patterns exist in Snowflake," and routing them into Salesforce "created bloat." The [Confessions of a CRM](https://open.spotify.com/episode/2tSb5dugcpdDxy48eC5JQt) host [summarized](https://www.linkedin.com/posts/anderskrohn_it-was-great-to-speak-with-kyle-ketchum-about-activity-7450122552884019200-ecs5) the shift as "treating the data warehouse as the source of truth." → All scoring is Snowflake-compatible SQL behind an adapter.
+- **Enrichment plus product activity.** Kyle combines "product-qualified activity with tech stack data, funding signals, and hiring patterns" ([Clay](https://www.clay.com/customers/figma)). → Real hiring posts that mention Figma Make or AI prototyping, real funding filings, and public firmographics, joined to a clearly labeled usage proxy where no public data exists.
+- **Signal-based selling, real signals first.** A rep acts on a reason they can open and check. So v2 flags an account only when *public, cited* signals line up: AI/design hiring, momentum against its own baseline, and a sourced company size. Synthetic usage is shown as context because Figma's real product data would replace it inside the warehouse, but it never decides who gets a call. The RevFest 2026 talk ["The GTM Engine Nobody Asked For"](https://www.linkedin.com/posts/andrewmattock_when-jen-igartua-first-asked-me-to-speak-activity-7459992646762151937-QXIL) was pitched at "where to start with a signal-based selling architecture." → Four real gates with written-down thresholds and reasons, and an `explain` command with source links.
+- **Agents a team can trust.** The posting asks you to "Define evaluation criteria, instrument AI workflows." → Handoffs cite every claim, invent no numbers, and contain no personal data, all enforced in code.
+
+The accounts are real public companies that appear in Figma's own [customer stories](https://www.figma.com/customers/). Usage numbers are a synthetic stand-in, labeled that way everywhere, and never decide a flag.
+
+## Real vs. proxy
+
+| Field | Real or proxy | Source |
+|---|---|---|
+| account name, domain, Figma customer-story URL and title, products mentioned (Make, Dev Mode, AI, MCP) | **Real** | Hand-curated `seeds/figma_customer_stories.csv`: Figma customer stories/blog plus public non-Figma sources (company blogs, handbooks, GitHub, conference talks); `source_type` per row. Never fetched by code |
+| open roles; roles mentioning "Figma" / "Figma Make" / "AI prototyping" / "vibe coding"; posting dates; role titles | **Real** | [Greenhouse](https://developers.greenhouse.io/job-board.html), [Lever](https://github.com/lever/postings-api), [Ashby](https://developers.ashbyhq.com/docs/public-job-posting-api) public job APIs |
+| hiring momentum (qualifying posts in the last 30 days vs. the prior 60) | **Real (derived), drives the flag** | Same job APIs |
+| last funding date (US) | **Real** | [SEC EDGAR](https://efts.sec.gov/LATEST/search-index) Form D full-text search (kept; 0 Form D hits for the current universe, which is mostly public or late-stage companies) |
+| funding and launch news mentions | **Dropped for v1** | [GDELT DOC 2.0 API](https://blog.gdeltproject.org/gdelt-doc-2-0-api-debuts/): two live pulls (5 s, then ≥10 s spacing with backoff) got 429 on about half the queries and empty results on the rest. The module stays and runs only with `--only news_gdelt` |
+| HN mentions of company + Figma | **Real** | [HN Algolia API](https://hn.algolia.com/api) |
+| employee count, industry, HQ country, website | **Real** (Wikidata, else hand-entered with a public source, else NULL) | [Wikidata](https://www.wikidata.org/) `Special:EntityData/<QID>.json` for hand-mapped QIDs (robots.txt disallows `/w/api.php` and `query.wikidata.org/sparql`); `seeds/manual_employees.csv` (`source=manual_public`: 10-K, annual report or the company's own page) |
+| contact role titles | **Real** (titles only) | Customer-story speaker titles (`seeds/story_contacts.csv`), manual snippets, or "Hiring team for: <role>" from the account's own job post |
+| paid seats, active seats, daily Make and agent events | **Synthetic stand-in, CONTEXT ONLY** (never affects flag, total or at-risk) | `signals/proxy.py`, seeded from real signal dates |
+| Figma agent first-use date | **Synthetic stand-in, CONTEXT ONLY** | `signals/proxy.py` |
+| owner_rep | Always NULL | CRM owner unknown for real companies → every handoff goes to "PLG / unowned queue (demo)" |
 
 ## Live result vs demo scenario
 
@@ -41,33 +73,6 @@ Same account + same normalized title within 14 days = one role (earliest date ke
 designer, product design, design system, wireframe, mock-up, ...) appears within 150 characters of the term. Bare "prototype" is not
 design context. This drops the Pinterest TPM boilerplate ("AI coding assistants ('vibe coding')"). `signals rematch` re-applies the rule
 offline to stored excerpts (which hold the same 150-char window).
-
-## Why this, for this role
-
-Figma's [Marketing Engineer, AI Deployment posting](https://boards.greenhouse.io/figma/jobs/6013495004) measures success by "agents live," "hours saved," and "revenue driven — pipeline, conversion lift, or deal velocity directly attributable to what you've built." This repo targets revenue driven, using the stack Kyle Ketchum has described publicly:
-
-- **Warehouse-first signals.** In the [Clay customer story](https://www.clay.com/customers/figma), product signals like "seat growth, feature adoption, and component usage patterns exist in Snowflake," and routing them into Salesforce "created bloat." The [Confessions of a CRM](https://open.spotify.com/episode/2tSb5dugcpdDxy48eC5JQt) host [summarized](https://www.linkedin.com/posts/anderskrohn_it-was-great-to-speak-with-kyle-ketchum-about-activity-7450122552884019200-ecs5) the shift as "treating the data warehouse as the source of truth." → All scoring is Snowflake-compatible SQL behind an adapter.
-- **Enrichment plus product activity.** Kyle combines "product-qualified activity with tech stack data, funding signals, and hiring patterns" ([Clay](https://www.clay.com/customers/figma)). → Real hiring posts that mention Figma Make or AI prototyping, real funding filings, and public firmographics, joined to a clearly labeled usage proxy where no public data exists.
-- **Signal-based selling, real signals first.** A rep acts on a reason they can open and check. So v2 flags an account only when *public, cited* signals line up: AI/design hiring, momentum against its own baseline, and a sourced company size. Synthetic usage is shown as context because Figma's real product data would replace it inside the warehouse, but it never decides who gets a call. The RevFest 2026 talk ["The GTM Engine Nobody Asked For"](https://www.linkedin.com/posts/andrewmattock_when-jen-igartua-first-asked-me-to-speak-activity-7459992646762151937-QXIL) was pitched at "where to start with a signal-based selling architecture." → Four real gates with written-down thresholds and reasons, and an `explain` command with source links.
-- **Agents a team can trust.** The posting asks you to "Define evaluation criteria, instrument AI workflows." → Handoffs cite every claim, invent no numbers, and contain no personal data, all enforced in code.
-
-The accounts are real public companies that appear in Figma's own [customer stories](https://www.figma.com/customers/). Usage numbers are a synthetic stand-in, labeled that way everywhere, and never decide a flag.
-
-## Real vs. proxy
-
-| Field | Real or proxy | Source |
-|---|---|---|
-| account name, domain, Figma customer-story URL and title, products mentioned (Make, Dev Mode, AI, MCP) | **Real** | Hand-curated `seeds/figma_customer_stories.csv`: Figma customer stories/blog plus public non-Figma sources (company blogs, handbooks, GitHub, conference talks); `source_type` per row. Never fetched by code |
-| open roles; roles mentioning "Figma" / "Figma Make" / "AI prototyping" / "vibe coding"; posting dates; role titles | **Real** | [Greenhouse](https://developers.greenhouse.io/job-board.html), [Lever](https://github.com/lever/postings-api), [Ashby](https://developers.ashbyhq.com/docs/public-job-posting-api) public job APIs |
-| hiring momentum (qualifying posts in the last 30 days vs. the prior 60) | **Real (derived), drives the flag** | Same job APIs |
-| last funding date (US) | **Real** | [SEC EDGAR](https://efts.sec.gov/LATEST/search-index) Form D full-text search (kept; 0 Form D hits for the current universe, which is mostly public or late-stage companies) |
-| funding and launch news mentions | **Dropped for v1** | [GDELT DOC 2.0 API](https://blog.gdeltproject.org/gdelt-doc-2-0-api-debuts/): two live pulls (5 s, then ≥10 s spacing with backoff) got 429 on about half the queries and empty results on the rest. The module stays and runs only with `--only news_gdelt` |
-| HN mentions of company + Figma | **Real** | [HN Algolia API](https://hn.algolia.com/api) |
-| employee count, industry, HQ country, website | **Real** (Wikidata, else hand-entered with a public source, else NULL) | [Wikidata](https://www.wikidata.org/) `Special:EntityData/<QID>.json` for hand-mapped QIDs (robots.txt disallows `/w/api.php` and `query.wikidata.org/sparql`); `seeds/manual_employees.csv` (`source=manual_public`: 10-K, annual report or the company's own page) |
-| contact role titles | **Real** (titles only) | Customer-story speaker titles (`seeds/story_contacts.csv`), manual snippets, or "Hiring team for: <role>" from the account's own job post |
-| paid seats, active seats, daily Make and agent events | **Synthetic stand-in, CONTEXT ONLY** (never affects flag, total or at-risk) | `signals/proxy.py`, seeded from real signal dates |
-| Figma agent first-use date | **Synthetic stand-in, CONTEXT ONLY** | `signals/proxy.py` |
-| owner_rep | Always NULL | CRM owner unknown for real companies → every handoff goes to "PLG / unowned queue (demo)" |
 
 ## Data ethics
 
@@ -185,3 +190,10 @@ None signed up for; each needs Andy's approval.
 | Brave Search API | Automate the manual LinkedIn/search snippets | $5 per 1,000 requests; card required even for free plan; storing results needs a plan with storage rights (no price listed) | [brave.com/search/api](https://brave.com/search/api/) | Oct 10, 2026 |
 | Crunchbase Pro / API | Global funding rounds (EDGAR is US-only) | No public price; API needs Basic/Enterprise license | [about.crunchbase.com/pricing](https://about.crunchbase.com/pricing/) | Oct 10, 2026 |
 | Apollo | Firmographics and titles | API only on Custom plans (no public price); data for internal use only | [apollo.io/pricing](https://www.apollo.io/pricing) | Oct 10, 2026 |
+## Static site (prepared, not deployed)
+
+`scripts/build_static.sh` builds `site/` offline from the frozen snapshot: `site/index.html` (live, no SYNTHETIC text) and
+`site/demo/index.html` (SYNTHETIC banner). The build has no key, no network and no LLM calls. It fails if the live page mentions
+SYNTHETIC or if any secret or email pattern appears. `Dockerfile` + `deploy/Caddyfile` serve `site/` read-only (GET/HEAD only,
+strict CSP, no env secrets). Local check: `PORT=8080 SITE_ROOT=$PWD/site caddy run --config deploy/Caddyfile --adapter caddyfile`.
+
