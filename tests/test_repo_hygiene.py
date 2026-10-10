@@ -9,7 +9,7 @@ def test_no_openrouter_keys_anywhere():
     for p in ROOT.rglob("*"):
         if p.is_file() and not any(x in p.parts for x in (".git", ".venv", "__pycache__")):
             try:
-                if (b"sk-" + b"or-") in p.read_bytes():
+                if b"".join([b"sk", b"-or-"]) in p.read_bytes():
                     hits.append(str(p))
             except OSError:
                 pass
