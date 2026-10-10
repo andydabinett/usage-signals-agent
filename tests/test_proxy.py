@@ -21,6 +21,8 @@ def _wh():
                  + [{"signal_id": "job:gh:y9", "account_id": "y", "ats": "gh", "post_id": "y9", "title": "Role", "url": "https://j/y9",
                      "published_on": dt.date(2026, 10, 1), "mentions_figma": False, "mentions_figma_make": False, "mentions_ai_prototyping": False}])
     wh.load_rows("funding", [{"signal_id": "fund:edgar:1", "account_id": "x", "source": "sec", "filed_on": dt.date(2026, 9, 30), "url": "https://sec/1"}])
+    from signals import qualify
+    qualify.apply(wh)
     proxy.build(wh, AS_OF)
     return wh
 

@@ -15,7 +15,7 @@ DEMO_ADDRESSED_TO = "SYNTHETIC DEMO SCENARIO. For: PLG / unowned queue (demo)"
 DEFAULT_MODEL = "anthropic/claude-sonnet-5.5"
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 KIND_RANK = {"job_make": 0, "funding": 1, "news_funding": 2, "job_figma": 3, "news_launch": 4, "hn": 5, "news_layoffs": 6}
-KIND_LABEL = {"job_make": "job post mentioning Figma Make / AI prototyping", "job_figma": "job post mentioning Figma",
+KIND_LABEL = {"job_agent_design": "design job post for AI agents", "job_make": "job post mentioning Figma Make / AI prototyping", "job_figma": "job post mentioning Figma",
               "funding": "SEC Form D funding filing", "news_funding": "funding news", "news_launch": "launch news",
               "news_layoffs": "layoffs news", "hn": "Hacker News mention", "story": "Figma customer story"}
 MAX_WORDS = 120
@@ -42,6 +42,9 @@ SYSTEM = f"""You write a short sales handoff for a Figma rep about one account. 
 Rules (enforced by code; violations are rejected):
 - addressed_to must be copied exactly from facts.addressed_to.
 - Any sentence citing a source with "synthetic": true must contain the word SYNTHETIC.
+- Each source has date_basis: "published" (first-published date) or "updated" (only an updated date is known). If you state the
+  date of a source whose date_basis is "updated", say "updated on <date>", never "posted on".
+- A source with also_posted_at is ONE role listed at several URLs; count it as one role.
 - Total under {MAX_WORDS} words across why_this_account, why_now, suggested_first_line and angles.
 - Every sentence in why_this_account and why_now ends with a citation like [1] whose n maps to an entry in `citations`;
   each citation's signal_id and url must be copied exactly from facts.sources.
@@ -61,14 +64,17 @@ def build_facts(wh, account_id: str, as_of: dt.date) -> dict:
     enr = (wh.query("SELECT employees, industry, country FROM enrichment WHERE account_id = %(a)s", {"a": account_id}) or [{}])[0]
     from .demo import mode_of
     demo = mode_of(wh) == "demo"
-    sigs = wh.query("SELECT signal_id, kind, signal_date, title, url, is_synthetic FROM signals WHERE account_id = %(a)s AND url IS NOT NULL "
+    sigs = wh.query("SELECT signal_id, kind, signal_date, title, url, is_synthetic, date_basis, dup_urls FROM signals WHERE account_id = %(a)s AND url IS NOT NULL "
                     "AND signal_date <= %(as_of)s", {"a": account_id, "as_of": as_of})
     sigs.sort(key=lambda s: (KIND_RANK.get(s["kind"], 9), -(s["signal_date"].toordinal() if s["signal_date"] else 0)))
     sources = [{"signal_id": f"story:{account_id}", "kind": "story", "date": None, "title": acct["story_title"], "url": acct["story_url"]}]
     top = sorted(sigs[:6], key=lambda s: (s["signal_date"] or dt.date.min, s["signal_id"]))  # oldest -> newest (D8 order check)
     sources += [{"signal_id": s["signal_id"], "kind": s["kind"], "date": s["signal_date"].isoformat() if s["signal_date"] else None,
                  "days_before_as_of": (as_of - s["signal_date"]).days if s["signal_date"] else None,
-                 "title": s["title"], "url": s["url"], "synthetic": bool(s["is_synthetic"])} for s in top]
+                 "title": s["title"], "url": s["url"], "synthetic": bool(s["is_synthetic"]),
+                 "date_basis": s["date_basis"],
+                 **({"also_posted_at": [u for u in s["dup_urls"].split() if u != s["url"]]}
+                    if s["dup_urls"] and len(s["dup_urls"].split()) > 1 else {})} for s in top]
     contacts = wh.query("SELECT role_title, source_url FROM contacts WHERE account_id = %(a)s ORDER BY role_title", {"a": account_id})[:2]
     g = float(row["g"])
     syn = wh.query("SELECT COUNT(*) AS n, SUM(CASE WHEN mentions_figma_make OR mentions_ai_prototyping THEN 1 ELSE 0 END) AS mk, "
@@ -196,6 +202,14 @@ def check(out: dict, facts: dict) -> dict:
     src = {s["signal_id"]: s["url"] for s in facts["sources"]}
     if out.get("addressed_to") != facts.get("addressed_to", ADDRESSED_TO):
         errors.append("addressed_to must be copied from facts (PLG / unowned queue)")
+    upd = {s["signal_id"] for s in facts["sources"] if s.get("date_basis") == "updated"}
+    if upd:
+        cm = {c["n"]: c["signal_id"] for c in out.get("citations", [])}
+        for field in ("why_this_account", "why_now"):
+            for sent in sentences(out.get(field, "")):
+                cited = {cm.get(int(n)) for n in CITE_RX.findall(sent)}
+                if cited & upd and (ISO_RX.search(sent) or MDY_RX.search(sent)) and "updated" not in sent.lower():
+                    errors.append(f"date of an updated-only source must be stated as 'updated on': {sent!r}")
     synth = {s["signal_id"] for s in facts["sources"] if s.get("synthetic")}
     if synth:
         if "SYNTHETIC" not in out.get("addressed_to", ""):
@@ -255,7 +269,8 @@ def template(facts: dict) -> dict:
     if real:
         top = real[-1]  # newest dated source
         cits.append({"n": 2, "signal_id": top["signal_id"], "url": top["url"]})
-        why_now = f"Latest public signal: {KIND_LABEL.get(top['kind'], top['kind'])} dated {top['date']} [2]."
+        verb = "updated" if top.get("date_basis") == "updated" else "dated"
+        why_now = f"Latest public signal: {KIND_LABEL.get(top['kind'], top['kind'])} {verb} {top['date']} [2]."
     else:
         why_now = "No dated public signal beyond the customer story [1]."
     who = [{"role_title": c["role_title"], "source_url": c["source_url"], "angle": "Figma agent rollout"} for c in facts["contacts"][:2]]

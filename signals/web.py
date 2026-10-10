@@ -30,7 +30,7 @@ The flag is decided by <b>real public signals only</b>. Seats and usage are a <b
 <table><tr><th>REAL component</th><th>pts</th><th>value</th><th>threshold</th><th>gate</th></tr>
 {% for c in r.components %}<tr><td>{{ c.name }}<span class="rbadge">real</span></td><td>{{ c.pts }}</td><td>{{ c.value }}</td><td>{{ c.threshold }}</td><td>{{ '-' if c.ok is none else ('PASS' if c.ok else 'fail') }}</td></tr>{% endfor %}
 {% for c in r.context %}<tr style="opacity:.7"><td>{{ c.name }}<span class="badge">synthetic stand-in</span></td><td>{{ c.pts }}</td><td>{{ c.value }}</td><td colspan=2>context only, never affects the flag</td></tr>{% endfor %}</table>
-<p><b>Signals</b>:</p><ul>{% for s in r.signals %}<li>{% if s.is_synthetic %}<b style="color:#b00020">SYNTHETIC</b> · {% endif %}{{ s.signal_date }} · {{ s.kind }} · <a href="{{ s.url }}">{{ s.title }}</a></li>{% endfor %}</ul>
+<p><b>Signals</b>:</p><ul>{% for s in r.signals %}<li>{% if s.is_synthetic %}<b style="color:#b00020">SYNTHETIC</b> · {% endif %}{{ s.signal_date }} ({{ s.date_basis }}) · {{ s.kind }} · <a href="{{ s.url }}">{{ s.title }}</a></li>{% endfor %}</ul>
 {% if r.handoff %}<div class="h"><b>{{ r.handoff.output.addressed_to }}</b><br>
 <b>Why this account:</b> {{ r.handoff.output.why_this_account }}<br><b>Why now:</b> {{ r.handoff.output.why_now }}<br>
 <b>Who:</b> {% for w in r.handoff.output.who_to_contact %}<a href="{{ w.source_url }}">{{ w.role_title }}</a> — {{ w.angle }}{% if not loop.last %}; {% endif %}{% endfor %}<br>
@@ -60,7 +60,7 @@ def render(wh, rows: list[dict], as_of, out_path: Path) -> Path:
         if not r["flagged"]:
             continue
         r = dict(r)
-        r["signals"] = wh.query("SELECT signal_date, kind, title, url, is_synthetic FROM signals WHERE account_id = %(a)s AND signal_date <= %(d)s "
+        r["signals"] = wh.query("SELECT signal_date, kind, title, url, is_synthetic, date_basis, dup_urls FROM signals WHERE account_id = %(a)s AND signal_date <= %(d)s "
                                 "ORDER BY signal_date DESC LIMIT 8", {"a": r["account_id"], "d": as_of})
         r["handoff"] = ho.cached(wh, r["account_id"])
         flagged.append(r)

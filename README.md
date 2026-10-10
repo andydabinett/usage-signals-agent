@@ -111,6 +111,19 @@ and committed together with this README section **before** v2 was run on live da
 | Company fit | employee count from Wikidata or `manual_public` (10-K, annual report, company page); snippets and estimates don't count | **≥ 200** | About where a company has a dedicated design org, several squads and procurement, so Figma Organization/Enterprise and agent rollout is a sales motion and not a self-serve Pro upgrade. Unknown counts fail: no fit without a source. No upper cap, because large companies buy too. |
 | Recent cited signal | non-synthetic signals with a URL in the last 30 days | **≥ 1** | Every flag must have a dated, clickable reason a rep can open. |
 
+**Which posts qualify (threshold-neutral, `signals/qualify.py`; re-apply offline with `signals requalify`):**
+- A Figma-related post qualifies if it is a **design role** (product, UX/UI, visual, brand, motion, creative, art direction,
+  illustration, design ops; "design engineer" counts), or if **any role's description is explicitly about** AI prototyping,
+  Figma Make, or designing for AI agents. **Interns are excluded.** Engineering, PM and other roles where Figma only appears as a listed
+  tool are excluded (for example Okta "Lead AI Engineer", Lyft "Senior Software Engineer - iOS").
+- **Dedupe:** the same company and normalized title (lowercased, punctuation and parentheticals removed) within 14 days of the earliest post is
+  one post. The earliest date is kept and every URL is listed (`dup_urls`; "also posted at" in the handoff, "also (same role)" in explain).
+- **Dates:** the first-published date is preferred (Greenhouse `first_published`, Ashby `publishedAt`, Lever `createdAt`). Where only an
+  updated date exists, the signal is marked `date_basis=updated`. `explain`, the web page and the handoff facts show this, and grounding
+  rejects a handoff that states such a date as "posted" instead of "updated on". In the Oct 10 data every post had a first-published date.
+- **No blog source in v1.** Public intent is only HN mentions and SEC Form D. Company blog or engineering-post mentions have no ingest
+  module, so they aren't counted.
+
 **Points (0–100) only rank accounts.** They never decide the flag:
 hiring 5/post (capped at 5 posts) plus 10 if any post is Make/AI/agent-design (max 35); momentum ratio ≥3 → 25, ≥2 → 18, ≥1.5 → 12;
 fit 200–5,000 → 20, >5,000 → 15, 50–199 → 5; public intent: 5 per HN mention in 90 days (max 2) plus 10 for a Form D in 180 days (max 20).

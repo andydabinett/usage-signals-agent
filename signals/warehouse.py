@@ -112,6 +112,9 @@ class SnowflakeAdapter:
 
 def init_schema(wh: DuckDBAdapter) -> None:
     wh.executescript((SQL_DIR / "schema.sql").read_text())
+    from .qualify import COLS  # migrate pre-qualification warehouses
+    for c, t in {**COLS, "is_synthetic": "BOOLEAN"}.items():
+        wh.execute(f"ALTER TABLE job_posts ADD COLUMN IF NOT EXISTS {c} {t}")
     wh.executescript((SQL_DIR / "signals_view.sql").read_text())
 
 

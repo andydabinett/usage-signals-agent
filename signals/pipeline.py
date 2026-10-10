@@ -48,6 +48,8 @@ def refresh(wh, as_of: dt.date, only: str | None = None, since: dt.date | None =
         counts[name] = mod.pull(wh, accounts, since, client=client, seeds_dir=seeds_dir, **kw)
         log(f"[{name}] rows={counts[name]}")
     counts["derived_contacts"] = derive_contacts(wh)
+    from . import qualify as _q
+    _q.apply(wh)
     proxy.build(wh, as_of)
     src_counts = {t: wh.query(f"SELECT COUNT(*) AS n FROM {t}")[0]["n"] for t in
                   ("accounts", "job_posts", "funding", "news", "mentions", "enrichment", "contacts", "raw_pulls")}

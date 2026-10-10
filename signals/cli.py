@@ -118,11 +118,13 @@ def explain(account_id: str, db: Optional[Path] = DB, as_of: Optional[str] = ASO
     typer.echo("\nCONTEXT ONLY (SYNTHETIC stand-ins; never affect the flag):")
     for c in context(r):
         typer.echo(f"      {c['name']:<20} {c['pts']:>3} pts  {c['value']}  [proxy]")
-    sigs = wh.query("SELECT signal_id, kind, signal_date, title, url FROM signals WHERE account_id = %(a)s AND signal_date <= %(d)s "
+    sigs = wh.query("SELECT signal_id, kind, signal_date, title, url, date_basis, dup_urls FROM signals WHERE account_id = %(a)s AND signal_date <= %(d)s "
                     "ORDER BY signal_date DESC", {"a": account_id, "d": a})
     typer.echo(f"\nSignals ({len(sigs)}):")
     for s in sigs[:25]:
-        typer.echo(f"  {s['signal_date']}  {s['kind']:<13} {s['signal_id']}\n      {s['title']}\n      {s['url']}")
+        typer.echo(f"  {s['signal_date']} (date_basis={s['date_basis']})  {s['kind']:<16} {s['signal_id']}\n      {s['title']}\n      {s['url']}")
+        for u in (s["dup_urls"] or "").split()[1:]:
+            typer.echo(f"      also (same role, deduped): {u}")
     if len(sigs) > 25:
         typer.echo(f"  … {len(sigs) - 25} more")
     typer.echo("\nProxy lineage (weeks; is_proxy=TRUE):")
@@ -196,5 +198,19 @@ def rematch(db: Path = typer.Option(DATA_DB, "--db")):
            if not ai_prototyping_in_context(r["excerpt"] or "", bool(r["mentions_figma"] or r["mentions_figma_make"]))]
     for sid in off:
         wh.execute("UPDATE job_posts SET mentions_ai_prototyping = FALSE WHERE signal_id = %(s)s", {"s": sid})
+    from . import qualify as _q
+    _q.apply(wh)
     proxy.build(wh, _a(wh, None))
     typer.echo(f"rematch: {len(rows)} AI-prototyping posts checked, {len(off)} dropped as out-of-context: {off}")
+
+
+@app.command()
+def requalify(db: Path = typer.Option(DATA_DB, "--db")):
+    """OFFLINE: re-apply post qualification + 14-day title dedupe (signals/qualify.py) to stored posts, rebuild the proxy."""
+    from . import proxy
+    from . import qualify as q
+    from .scoring import as_of_from as _a
+    wh = open_wh(db)
+    st = q.apply(wh)
+    proxy.build(wh, _a(wh, None))
+    typer.echo(json.dumps(st, indent=2, sort_keys=True))

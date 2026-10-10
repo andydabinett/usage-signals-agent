@@ -45,6 +45,8 @@ def build(live_db: Path, demo_db: Path, account_id: str, as_of: dt.date, days_ag
         "url": f"https://example.invalid/synthetic/{account_id}", "published_on": d, "updated_on": d,
         "mentions_figma": True, "mentions_figma_make": True, "mentions_ai_prototyping": True,
         "excerpt": f"{LABEL} Injected for the demo scenario; not a real job post.", "is_synthetic": True}])
+    from . import qualify as _q
+    _q.apply(wh)
     proxy.build(wh, as_of)
     wh.execute("UPDATE snapshot_meta SET mode = 'demo'")
     wh.close()

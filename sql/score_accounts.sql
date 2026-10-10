@@ -2,13 +2,13 @@
 -- total, flagged or cooling. All constants come from config/scoring.yaml; all dates are precomputed in Python
 -- (no dialect-specific date math, so the same text runs on Snowflake and DuckDB).
 WITH posts AS (
+  -- only qualifying, de-duplicated posts (see the Python qualification step); date = first-published, else updated (date_basis)
   SELECT account_id, COALESCE(is_synthetic, FALSE) AS is_synthetic, url,
          COALESCE(published_on, updated_on) AS d,
-         CASE WHEN mentions_figma_make OR mentions_ai_prototyping
-                   OR (LOWER(title) LIKE '%design%' AND LOWER(title) LIKE '%agent%') THEN 1 ELSE 0 END AS is_make,
-         CASE WHEN mentions_figma OR mentions_figma_make OR mentions_ai_prototyping
-                   OR (LOWER(title) LIKE '%design%' AND LOWER(title) LIKE '%agent%') THEN 1 ELSE 0 END AS qual
+         CASE WHEN is_make_ai_agent THEN 1 ELSE 0 END AS is_make,
+         1 AS qual
   FROM job_posts
+  WHERE qualifies AND dup_of IS NULL
 ),
 hire AS (
   SELECT account_id,
