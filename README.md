@@ -8,6 +8,32 @@ that appear in Figma's own customer stories. Seats and usage are a **clearly lab
 **Status:** private repo, nothing deployed. The offline snapshot (`snapshot/`) is **pending**: it is frozen only after a human reviews
 the live pull (`signals explain` for every flagged account). Until then, run the demo with `--db data/warehouse.duckdb`.
 
+## Live result vs demo scenario
+
+**Live (honest) result, Oct 10 r3 pull, 38 accounts, thresholds unchanged:** 0 flagged; at risk: Carta, PostHog, Webflow.
+Near-misses: Instacart 50 and Samsara 50 (both fail `min_growth` 10 and `min_total` 55), then Duolingo, Okta and Robinhood at 36.
+See `docs/live-pull-2026-10-10-r3.md`.
+
+**Demo scenario (`signals demo <account>`), clearly SYNTHETIC:** copies the live warehouse to `data/demo.duckdb` (the live file is never
+modified) and injects ONE synthetic job post on one real account (here Instacart, dated 2026-10-07). Every synthetic row has
+`is_synthetic = TRUE`, a `SYNTHETIC:` signal_id, a `[SYNTHETIC]` title prefix and an `example.invalid` URL; `snapshot_meta.mode = 'demo'`.
+The handoff's `addressed_to` starts with `SYNTHETIC DEMO SCENARIO`, any sentence citing the synthetic source must say SYNTHETIC
+(grounding rejects it otherwise), and "real" counts in the handoff facts exclude the synthetic row. The web page shows a red SYNTHETIC
+banner and marks the row. Scoring refuses to run on a *live* warehouse that contains a synthetic row (`SyntheticInLiveError`).
+
+```
+signals demo instacart --db data/warehouse.duckdb --out data/demo.duckdb
+signals handoff instacart --refresh --db data/demo.duckdb
+signals web --db data/demo.duckdb --out out/demo/index.html
+```
+
+## Matching rule (AI prototyping / vibe coding)
+
+"AI prototyping" / "vibe coding" counts only if Figma or Figma Make appears anywhere in the same post, or a design context (UX, UI/UX,
+designer, product design, design system, wireframe, mock-up, ...) appears within 150 characters of the term. Bare "prototype" is not
+design context. This drops the Pinterest TPM boilerplate ("AI coding assistants ('vibe coding')"). `signals rematch` re-applies the rule
+offline to stored excerpts (which hold the same 150-char window).
+
 ## Why this, for this role
 
 Figma's [Marketing Engineer, AI Deployment posting](https://boards.greenhouse.io/figma/jobs/6013495004) measures success by "agents live," "hours saved," and "revenue driven — pipeline, conversion lift, or deal velocity directly attributable to what you've built." This repo targets revenue driven, using the stack Kyle Ketchum has described publicly:

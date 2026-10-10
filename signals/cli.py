@@ -166,3 +166,33 @@ def web(db: Optional[Path] = DB, out: Path = typer.Option(ROOT / "out" / "index.
 
 if __name__ == "__main__":
     app()
+
+
+@app.command()
+def demo(account_id: str = typer.Argument(..., help="Real account to receive ONE synthetic spike"),
+         db: Path = typer.Option(DATA_DB, "--db", help="Live warehouse to copy (never modified)"),
+         out: Path = typer.Option(ROOT / "data" / "demo.duckdb", "--out")):
+    """OFFLINE: build a clearly labeled SYNTHETIC demo-scenario warehouse (copy of the live one + one synthetic spike)."""
+    from . import demo as dm
+    src = open_wh(_db(db), read_only=True)
+    a = as_of_from(src, None)
+    src.close()
+    info = dm.build(_db(db), out, account_id, a)
+    typer.echo(f"SYNTHETIC demo scenario written to {out}: {info['signal_id']} dated {info['date']} on {account_id}")
+
+
+@app.command()
+def rematch(db: Path = typer.Option(DATA_DB, "--db")):
+    """OFFLINE: re-apply the current AI-prototyping context rule to stored job-post excerpts (no network), then rebuild the proxy.
+    Excerpts hold +-150 chars around each AI term, so this equals the ingest-time rule."""
+    from . import proxy
+    from .ingest.common import ai_prototyping_in_context
+    from .scoring import as_of_from as _a
+    wh = open_wh(db)
+    rows = wh.query("SELECT signal_id, excerpt, mentions_figma, mentions_figma_make FROM job_posts WHERE mentions_ai_prototyping")
+    off = [r["signal_id"] for r in rows
+           if not ai_prototyping_in_context(r["excerpt"] or "", bool(r["mentions_figma"] or r["mentions_figma_make"]))]
+    for sid in off:
+        wh.execute("UPDATE job_posts SET mentions_ai_prototyping = FALSE WHERE signal_id = %(s)s", {"s": sid})
+    proxy.build(wh, _a(wh, None))
+    typer.echo(f"rematch: {len(rows)} AI-prototyping posts checked, {len(off)} dropped as out-of-context: {off}")

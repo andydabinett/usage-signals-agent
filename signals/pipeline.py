@@ -52,5 +52,5 @@ def refresh(wh, as_of: dt.date, only: str | None = None, since: dt.date | None =
     src_counts = {t: wh.query(f"SELECT COUNT(*) AS n FROM {t}")[0]["n"] for t in
                   ("accounts", "job_posts", "funding", "news", "mentions", "enrichment", "contacts", "raw_pulls")}
     wh.execute("DELETE FROM snapshot_meta")
-    wh.load_rows("snapshot_meta", [{"as_of": as_of, "frozen_at": None, "git_sha": None, "source_counts": json.dumps(src_counts)}])
+    wh.load_rows("snapshot_meta", [{"as_of": as_of, "frozen_at": None, "git_sha": None, "source_counts": json.dumps(src_counts), "mode": "live"}])
     return {"module_rows": counts, "table_counts": src_counts, **client.summary()}

@@ -16,3 +16,11 @@
 - `wikidata_qid` is hand-mapped from public Wikidata pages (`;` = candidates; first one with an employee count wins).
 - `manual_employees.csv` (`source=manual_public`): counts from a 10-K, an annual report or the company's own page, for accounts
   Wikidata had no count for. Values were taken from public search snippets of the cited page; a human should confirm each one.
+
+
+## Oct 10 r3 changes
+- Seed widened to 38 accounts (+18: Lyft, Intercom, Monzo, Gusto, Twilio, Supabase, Robinhood, Instacart, Brex, Ramp, PostHog,
+  Cloudflare, Zapier, Affirm, Okta, Reddit, Webflow, Samsara), each with a non-figma.com source URL in `story_url`.
+- Stripe and Notion: no outside source found that names Figma (stripe.dev Harbor post and notion.com design post checked, no mention),
+  so they keep their figma.com URLs, marked `source_type = figma.com (hand-recorded; no programmatic access)`.
+- `manual_employees.csv` gains `confirmation` / `confirmation_note` from `scripts/confirm_employees.py` (robots-checked fetch).

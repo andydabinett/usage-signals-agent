@@ -11,6 +11,7 @@ import httpx
 from .scoring import score
 
 ADDRESSED_TO = "For: PLG / unowned queue (demo)"
+DEMO_ADDRESSED_TO = "SYNTHETIC DEMO SCENARIO. For: PLG / unowned queue (demo)"
 DEFAULT_MODEL = "anthropic/claude-sonnet-5.5"
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 KIND_RANK = {"job_make": 0, "funding": 1, "news_funding": 2, "job_figma": 3, "news_launch": 4, "hn": 5, "news_layoffs": 6}
@@ -39,7 +40,8 @@ SCHEMA = {
 
 SYSTEM = f"""You write a short sales handoff for a Figma rep about one account. Output JSON matching the schema.
 Rules (enforced by code; violations are rejected):
-- addressed_to must be exactly "{ADDRESSED_TO}".
+- addressed_to must be copied exactly from facts.addressed_to.
+- Any sentence citing a source with "synthetic": true must contain the word SYNTHETIC.
 - Total under {MAX_WORDS} words across why_this_account, why_now, suggested_first_line and angles.
 - Every sentence in why_this_account and why_now ends with a citation like [1] whose n maps to an entry in `citations`;
   each citation's signal_id and url must be copied exactly from facts.sources.
@@ -57,23 +59,33 @@ def build_facts(wh, account_id: str, as_of: dt.date) -> dict:
     row = next(r for r in score(wh, as_of) if r["account_id"] == account_id)
     acct = wh.query("SELECT * FROM accounts WHERE account_id = %(a)s", {"a": account_id})[0]
     enr = (wh.query("SELECT employees, industry, country FROM enrichment WHERE account_id = %(a)s", {"a": account_id}) or [{}])[0]
-    sigs = wh.query("SELECT signal_id, kind, signal_date, title, url FROM signals WHERE account_id = %(a)s AND url IS NOT NULL "
+    from .demo import mode_of
+    demo = mode_of(wh) == "demo"
+    sigs = wh.query("SELECT signal_id, kind, signal_date, title, url, is_synthetic FROM signals WHERE account_id = %(a)s AND url IS NOT NULL "
                     "AND signal_date <= %(as_of)s", {"a": account_id, "as_of": as_of})
     sigs.sort(key=lambda s: (KIND_RANK.get(s["kind"], 9), -(s["signal_date"].toordinal() if s["signal_date"] else 0)))
     sources = [{"signal_id": f"story:{account_id}", "kind": "story", "date": None, "title": acct["story_title"], "url": acct["story_url"]}]
     top = sorted(sigs[:6], key=lambda s: (s["signal_date"] or dt.date.min, s["signal_id"]))  # oldest -> newest (D8 order check)
     sources += [{"signal_id": s["signal_id"], "kind": s["kind"], "date": s["signal_date"].isoformat() if s["signal_date"] else None,
                  "days_before_as_of": (as_of - s["signal_date"]).days if s["signal_date"] else None,
-                 "title": s["title"], "url": s["url"]} for s in top]
+                 "title": s["title"], "url": s["url"], "synthetic": bool(s["is_synthetic"])} for s in top]
     contacts = wh.query("SELECT role_title, source_url FROM contacts WHERE account_id = %(a)s ORDER BY role_title", {"a": account_id})[:2]
     g = float(row["g"])
+    syn = wh.query("SELECT COUNT(*) AS n, SUM(CASE WHEN mentions_figma_make OR mentions_ai_prototyping THEN 1 ELSE 0 END) AS mk, "
+                   "SUM(CASE WHEN mentions_figma THEN 1 ELSE 0 END) AS fg FROM job_posts WHERE account_id = %(a)s AND is_synthetic "
+                   "AND COALESCE(published_on, updated_on) > %(lo)s AND COALESCE(published_on, updated_on) <= %(d)s",
+                   {"a": account_id, "lo": as_of - dt.timedelta(days=30), "d": as_of})[0]
+    sn, smk, sfg = int(syn["n"] or 0), int(syn["mk"] or 0), int(syn["fg"] or 0)
     return {
         "account_id": account_id, "account_name": acct["account_name"], "as_of": as_of.isoformat(),
+        "mode": "demo" if demo else "live",
+        "addressed_to": DEMO_ADDRESSED_TO if demo else ADDRESSED_TO,
         "customer_story": {"url": acct["story_url"], "title": acct["story_title"], "products_mentioned": acct["products_mentioned"]},
         "score": {"total": int(row["total"]), "growth_pts": int(row["growth_pts"]), "breadth_pts": int(row["breadth_pts"]),
                   "agent_pts": int(row["agent_pts"]), "fit_pts": int(row["fit_pts"]), "intent_pts": int(row["intent_pts"]),
-                  "real": {"figma_make_or_ai_roles_30d": int(row["make_roles"]), "figma_roles_30d": int(row["figma_roles"]),
-                           "real_signals_30d": int(row["real_signals_30d"])},
+                  "real": {"figma_make_or_ai_roles_30d": int(row["make_roles"]) - smk, "figma_roles_30d": int(row["figma_roles"]) - sfg,
+                           "real_signals_30d": int(row["real_signals_30d"]) - sn},
+                  **({"synthetic_signals_30d": sn} if sn else {}),
                   "proxy": {"weekly_events_w0": int(row["e0"]), "weekly_events_w1": int(row["e1"]),
                             "wow_growth_pct": int(round(g * 100)), "active_seats_w0": int(row["active_w0"]),
                             "paid_seats": int(row["paid_seats"]), "agent_seats_w0": int(row["agent_seats_w0"])}},
@@ -179,8 +191,17 @@ def check(out: dict, facts: dict) -> dict:
     errors, warnings = [], []
     errors += check_chronology(out, facts)
     src = {s["signal_id"]: s["url"] for s in facts["sources"]}
-    if out.get("addressed_to") != ADDRESSED_TO:
-        errors.append("addressed_to must be the PLG / unowned queue")
+    if out.get("addressed_to") != facts.get("addressed_to", ADDRESSED_TO):
+        errors.append("addressed_to must be copied from facts (PLG / unowned queue)")
+    synth = {s["signal_id"] for s in facts["sources"] if s.get("synthetic")}
+    if synth:
+        if "SYNTHETIC" not in out.get("addressed_to", ""):
+            errors.append("demo handoff must be labeled SYNTHETIC in addressed_to")
+        cmap = {c["n"]: c["signal_id"] for c in out.get("citations", [])}
+        for field in ("why_this_account", "why_now"):
+            for sent in sentences(out.get(field, "")):
+                if any(cmap.get(int(n)) in synth for n in CITE_RX.findall(sent)) and "SYNTHETIC" not in sent:
+                    errors.append(f"sentence cites a synthetic source without the SYNTHETIC label: {sent!r}")
     cites = {c["n"]: c for c in out.get("citations", [])}
     for c in cites.values():
         if c["signal_id"] not in src:
@@ -226,6 +247,7 @@ def template(facts: dict) -> dict:
     story = srcs[0]
     real = sorted([s for s in srcs[1:] if s.get("date")], key=lambda s: s["date"])
     cits = [{"n": 1, "signal_id": story["signal_id"], "url": story["url"]}]
+    why_now = ""
     why_acct = f"{facts['account_name']} is featured in a public Figma customer story [1]."
     if real:
         top = real[-1]  # newest dated source
@@ -234,7 +256,9 @@ def template(facts: dict) -> dict:
     else:
         why_now = "No dated public signal beyond the customer story [1]."
     who = [{"role_title": c["role_title"], "source_url": c["source_url"], "angle": "Figma agent rollout"} for c in facts["contacts"][:2]]
-    return {"addressed_to": ADDRESSED_TO, "why_this_account": why_acct, "why_now": why_now, "who_to_contact": who,
+    if top_synth := (real and real[-1].get("synthetic")):
+        why_now = "SYNTHETIC demo signal: " + why_now
+    return {"addressed_to": facts.get("addressed_to", ADDRESSED_TO), "why_this_account": why_acct, "why_now": why_now, "who_to_contact": who,
             "suggested_first_line": "Saw your team's public Figma story and recent hiring; curious how the new Figma agent fits.",
             "citations": cits, "numbers_cited": []}
 

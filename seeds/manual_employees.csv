@@ -1,10 +1,22 @@
-account_id,employees,source_url,source,collected_on,note
-datadog,8100,https://www.sec.gov/Archives/edgar/data/1561550/000162828026008819/ddog-20251231.htm,manual_public,2026-10-10,"10-K FY2025: approximately 8,100 employees as of Dec 31, 2025"
-duolingo,900,https://www.sec.gov/Archives/edgar/data/1562088/000162828026025737/duolingodecember312025an.htm,manual_public,2026-10-10,"10-K FY2025: more than 900 employees as of Dec 31, 2025"
-gitlab,2580,https://www.sec.gov/Archives/edgar/data/1653482/000162828026018731/gtlb-20260131.htm,manual_public,2026-10-10,"10-K FY2026: approximately 2,580 team members as of Jan 31, 2026"
-asana,1767,https://investors.asana.com/static-files/9b79a79f-ece8-4f9c-93de-e61eb6aee065,manual_public,2026-10-10,"10-K FY2026: 1,767 employees as of Jan 31, 2026"
-adyen,4771,https://investors.adyen.com/financials/2025,manual_public,2026-10-10,"Annual Report 2025: 4,771 FTEs at end of 2025"
-mozilla,906,https://assets.mozilla.net/pdf/Mozilla_Impact_Report_2026.pdf,manual_public,2026-10-10,"Mozilla 2026 SEI fact sheet: Mozilla Corporation 906 employees as of Dec 31, 2025"
-plaid,900,https://plaid.com/company/,manual_public,2026-10-10,"Company page: 900+ team members"
-carta,1900,https://carta.com/about/,manual_public,2026-10-10,"About page: 1,900+ employees"
-insiderone,1500,https://insiderone.com/hande-cilingir-bio/,manual_public,2026-10-10,"Company site: more than 1,500 team members"
+account_id,employees,source_url,source,collected_on,note,confirmation,confirmation_note
+datadog,8100,https://www.sec.gov/Archives/edgar/data/1561550/000162828026008819/ddog-20251231.htm,manual_public,2026-10-10,"10-K FY2025: approximately 8,100 employees as of Dec 31, 2025",confirmed,number found next to employee wording on the fetched page
+duolingo,900,https://www.sec.gov/Archives/edgar/data/1562088/000162828026025737/duolingodecember312025an.htm,manual_public,2026-10-10,"10-K FY2025: more than 900 employees as of Dec 31, 2025",confirmed,number found next to employee wording on the fetched page
+gitlab,2580,https://www.sec.gov/Archives/edgar/data/1653482/000162828026018731/gtlb-20260131.htm,manual_public,2026-10-10,"10-K FY2026: approximately 2,580 team members as of Jan 31, 2026",confirmed,number found next to employee wording on the fetched page
+asana,1767,https://investors.asana.com/static-files/9b79a79f-ece8-4f9c-93de-e61eb6aee065,manual_public,2026-10-10,"10-K FY2026: 1,767 employees as of Jan 31, 2026",unconfirmed,HTTP 403 to automated fetch; value from search snippet of the 10-K
+adyen,4771,https://investors.adyen.com/financials/2025,manual_public,2026-10-10,"Annual Report 2025: 4,771 FTEs at end of 2025",unconfirmed,page is JS-rendered; number not in fetched HTML
+mozilla,906,https://assets.mozilla.net/pdf/Mozilla_Impact_Report_2026.pdf,manual_public,2026-10-10,Mozilla Impact Report: Mozilla Corporation 906 total employees (stated as of 2022),corrected,"906 found on page but stated 'as of 2022', not Dec 31 2025; note corrected"
+plaid,900,https://plaid.com/company/,manual_public,2026-10-10,Company page: 900+ team members,confirmed,number found next to employee wording on the fetched page
+carta,1900,https://carta.com/about/,manual_public,2026-10-10,"About page: 1,900+ employees",confirmed,number found next to employee wording on the fetched page
+insiderone,1500,https://insiderone.com/hande-cilingir-bio/,manual_public,2026-10-10,"Company site: more than 1,500 team members",confirmed,number found next to employee wording on the fetched page
+crunchyroll,1000,https://www.sony.com/en/SonyInfo/IR/news/20250403/01.pdf,manual_public,2026-10-10,"Sony IR Crunchyroll Spotlight: more than 1,000 employees",unconfirmed,sony.com returned HTTP 403 to automated fetch
+linear,160,https://nativefirst.ai/blog/linear-100m-arr-160-people/,manual_public,2026-10-10,Press: Linear hit $100M ARR with 160 people,confirmed,third-party press headline: '160 People'
+lyft,3913,https://www.sec.gov/Archives/edgar/data/1759509/000162828026006960/lyft-20251231.htm,manual_public,2026-10-10,"10-K FY2025: 3,913 full-time employees as of Dec 31, 2025",confirmed,number found next to employee wording on the fetched page
+instacart,3600,https://www.sec.gov/Archives/edgar/data/1579091/000157909126000027/maplebearinc-2026annualrep.pdf,manual_public,2026-10-10,"Annual report / 10-K FY2025: approximately 3,600 full-time employees",confirmed,number found next to employee wording on the fetched page
+okta,6366,https://www.sec.gov/Archives/edgar/data/1660134/000166013426000020/okta-20260131.htm,manual_public,2026-10-10,"10-K FY2026: 6,366 employees as of Jan 31, 2026",confirmed,number found next to employee wording on the fetched page
+reddit,2555,https://www.sec.gov/Archives/edgar/data/1713445/000171344526000022/rddt-20251231.htm,manual_public,2026-10-10,"10-K FY2025: 2,555 employees as of Dec 31, 2025",confirmed,number found next to employee wording on the fetched page
+robinhood,2958,https://www.sec.gov/Archives/edgar/data/1783879/000178387926000029/hood-20251231.htm,manual_public,2026-10-10,"10-K FY2025: 2,958 full-time employees as of Dec 31, 2025",unconfirmed,"URL is the 10-K/A (Part III only); 2,958 not in that document; original 10-K is on investors.robinhood.com"
+samsara,4100,https://www.sec.gov/Archives/edgar/data/1642896/000162828026039507/iot2026ars.pdf,manual_public,2026-10-10,"Annual report FY2026: more than 4,100 full-time employees",confirmed,number found next to employee wording on the fetched page
+twilio,5587,https://www.sec.gov/Archives/edgar/data/1447669/000144766926000021/twlo-20251231.htm,manual_public,2026-10-10,"10-K FY2025: 5,587 employees as of Dec 31, 2025",confirmed,number found next to employee wording on the fetched page
+affirm,2358,https://www.sec.gov/Archives/edgar/data/1820953/000162828026059279/afrm-20260630.htm,manual_public,2026-10-10,"10-K FY2026: 2,358 employees as of Jun 30, 2026",confirmed,number found next to employee wording on the fetched page
+monzo,4674,https://monzo.com/annual-report/2026/Monzo-Annual-Report-2026.pdf,manual_public,2026-10-10,"FY26 annual report: average 4,674 FTE",unconfirmed,"4,674 appears in the PDF but next to a pension-contribution line; headcount table not cleanly parsed"
+zapier,800,https://zapier.com/about,manual_public,2026-10-10,About page: 800+ employees,confirmed,number found next to employee wording on the fetched page

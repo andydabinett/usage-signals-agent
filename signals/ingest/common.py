@@ -15,6 +15,13 @@ from ..http import redact
 RX_MAKE = re.compile(r"\bfigma make\b", re.I)
 RX_AIPROTO = re.compile(r"\bai[- ]prototyp|\bvibe[- ]coding\b", re.I)
 RX_FIGMA = re.compile(r"\bfigma\b", re.I)
+# AI-prototyping / vibe-coding counts only with Figma or Figma Make anywhere in the post, or a DESIGN context within
+# CTX_WINDOW chars of the term (Oct 10 tightening). Bare "prototype" is not design context: Pinterest TPM boilerplate
+# ("Prototype lightweight AI-powered helpers ... ('vibe coding')", "AI coding assistants ('vibe coding')") must not count.
+CTX_WINDOW = 150
+RX_DESIGN_CTX = re.compile(r"\bux\b|\bui/ux\b|\bux/ui\b|\bwirefram\w*|\bmock-?ups?\b|\bproduct design\w*|"
+                           r"\b(?:ux|ui|product|visual|interaction|brand) designers?\b|\bdesigners?\b|\bdesign systems?\b|"
+                           r"\bdesign (?:prototyp\w*|team|crafts?|tools?)\b|\binteraction design\b|\bprototyp\w* (?:designs?|ui|ux|interfaces?|user flows?)\b", re.I)
 
 
 def html_to_text(s: str | None) -> str:
@@ -28,11 +35,27 @@ def html_to_text(s: str | None) -> str:
     return re.sub(r"\s+", " ", html.unescape(text)).strip()
 
 
+def ai_prototyping_in_context(text: str, figma_anywhere: bool | None = None) -> bool:
+    """True only if an AI-prototyping/vibe-coding term appears AND (Figma/Figma Make appear anywhere in the post OR a
+    design context appears within CTX_WINDOW chars of the term). The matched term is never its own context."""
+    if not RX_AIPROTO.search(text):
+        return False
+    if figma_anywhere is None:
+        figma_anywhere = bool(RX_FIGMA.search(text) or RX_MAKE.search(text))
+    if figma_anywhere:
+        return True
+    for m in RX_AIPROTO.finditer(text):
+        win = text[max(0, m.start() - CTX_WINDOW): m.start()] + " " + text[m.end(): m.end() + CTX_WINDOW]
+        if RX_DESIGN_CTX.search(RX_AIPROTO.sub(" ", win)):
+            return True
+    return False
+
+
 def match_flags(text: str) -> dict:
     return {
         "mentions_figma": bool(RX_FIGMA.search(text)),
         "mentions_figma_make": bool(RX_MAKE.search(text)),
-        "mentions_ai_prototyping": bool(RX_AIPROTO.search(text)),
+        "mentions_ai_prototyping": ai_prototyping_in_context(text),
     }
 
 

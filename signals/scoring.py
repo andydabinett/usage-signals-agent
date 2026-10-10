@@ -16,6 +16,8 @@ def as_of_from(wh, override: dt.date | None = None) -> dt.date:
 
 
 def score(wh, as_of: dt.date, cfg: dict | None = None) -> list[dict]:
+    from .demo import assert_live_clean
+    assert_live_clean(wh)  # synthetic rows may only exist in a demo-mode warehouse
     sql = (SQL_DIR / "score_accounts.sql").read_text()
     return wh.query(sql, score_params(as_of, cfg or scoring_config()))
 

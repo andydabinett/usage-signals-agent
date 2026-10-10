@@ -132,3 +132,19 @@ def test_edgar_stops_after_first_403():
         route = r.get(url__regex=r"https://efts\.sec\.gov/LATEST/.*").mock(return_value=httpx.Response(403, text="Undeclared"))
         n = funding_edgar.pull(wh, accts, None, client=make_client(wh), seeds_dir=SEEDS, as_of=AS_OF)
     assert n == 0 and route.call_count == 1
+
+
+def test_vibe_coding_boilerplate_without_design_context_is_ignored():
+    from signals.ingest.common import match_flags
+    tpm = ("Sr. Technical Program Manager. Build internal tools using AI coding assistants (\u201cvibe coding\u201d). "
+           "Follow AI guidance for risk, governance, and safety-by-design.")
+    assert match_flags(tpm)["mentions_ai_prototyping"] is False
+    assert match_flags("Product Designer: explore ideas with AI prototyping and vibe coding.")["mentions_ai_prototyping"] is True
+    assert match_flags("Engineer. Vibe coding prototypes with the design team in Figma.")["mentions_ai_prototyping"] is True
+    assert match_flags("Data engineer. AI-prototyping of pipelines.")["mentions_ai_prototyping"] is False  # term is not its own context
+    # the second Pinterest boilerplate variant: bare "prototype" is not design context
+    tpm2 = "Prototype lightweight AI-powered helpers and tools (\u201cvibe coding\u201d) to improve signal quality monitoring."
+    assert match_flags(tpm2)["mentions_ai_prototyping"] is False
+    # design context far away from the term does not count
+    far = "We partner with designers. " + "x " * 200 + "Use vibe coding for internal dashboards."
+    assert match_flags(far)["mentions_ai_prototyping"] is False
