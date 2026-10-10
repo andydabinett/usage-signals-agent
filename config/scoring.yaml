@@ -1,0 +1,17 @@
+# All scoring weights and thresholds. sql/score_accounts.sql reads these as params; no SQL edits needed.
+ga_date: "2026-10-06"
+growth:   {t1: 1.00, p1: 25, t2: 0.50, p2: 18, t3: 0.20, p3: 10}
+breadth:  {min_active: 5, t1: 0.60, p1: 20, t2: 0.40, p2: 12, t3: 0.20, p3: 4}
+agent:    {min_seats: 5, p_new: 20, p_seats: 12, p_some: 4}
+fit:
+  mid_lo: 200
+  mid_hi: 5000
+  p_mid: 10
+  p_large: 8
+  small_lo: 50
+  p_small: 5
+  funding_days: 180
+  p_funding: 10
+intent:   {window_days: 30, p_make: 15, min_figma: 2, p_figma2: 8, p_figma1: 4}
+flag:     {min_total: 55, min_growth: 10, min_fit: 5, min_real_signals: 1}
+at_risk:  {max_growth: -0.30, min_e1: 100}

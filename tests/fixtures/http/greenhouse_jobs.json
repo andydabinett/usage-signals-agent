@@ -1,0 +1,5 @@
+{"jobs":[
+ {"id":101,"title":"Senior Product Designer","absolute_url":"https://boards.greenhouse.io/acme/jobs/101","updated_at":"2026-10-03T12:00:00-04:00","first_published":"2026-10-02T09:00:00-04:00","content":"&lt;p&gt;You will prototype in &lt;b&gt;Figma Make&lt;/b&gt; and do AI prototyping daily. Contact jobs@acme.example&lt;/p&gt;"},
+ {"id":102,"title":"Frontend Engineer","absolute_url":"https://boards.greenhouse.io/acme/jobs/102","updated_at":"2026-09-26T12:00:00-04:00","first_published":"2026-09-25T09:00:00-04:00","content":"&lt;p&gt;Work from Figma specs with designers.&lt;/p&gt;"},
+ {"id":103,"title":"Accountant","absolute_url":"https://boards.greenhouse.io/acme/jobs/103","updated_at":"2026-09-01T12:00:00-04:00","first_published":"2026-08-30T09:00:00-04:00","content":"&lt;p&gt;Spreadsheets.&lt;/p&gt;"}
+]}

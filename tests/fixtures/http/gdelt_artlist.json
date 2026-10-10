@@ -1,0 +1,4 @@
+{"articles":[
+ {"url":"https://news.example/acme-raises","title":"Acme Design raises Series C to expand AI tools","seendate":"20261001T120000Z","domain":"news.example"},
+ {"url":"https://news.example/acme-launch","title":"Acme Design launches new app","seendate":"20260920T120000Z","domain":"news.example"},
+ {"url":"https://news.example/other","title":"Unrelated company raises money","seendate":"20261001T120000Z","domain":"news.example"}]}

@@ -1,0 +1,3 @@
+account_id,company,legal_name,domain,search_name,story_url,story_title,products_mentioned,accessed_on,verified_in_browser
+acme,Acme Design,Acme Design Inc,acme.example,Acme Design,https://www.figma.com/customers/acme-story/,How Acme ships faster with Figma Make,Make,2026-10-10,no
+bolt,Bolt Labs,Bolt Labs Inc,bolt.example,Bolt Labs,https://www.figma.com/customers/bolt-story/,Bolt Labs scales its design system,Design,2026-10-10,no

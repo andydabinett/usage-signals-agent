@@ -1,0 +1,3 @@
+{"hits":{"hits":[
+ {"_id":"0001234567-26-000001:primary_doc.xml","_source":{"adsh":"0001234567-26-000001","ciks":["0001234567"],"display_names":["Acme Design, Inc.  (CIK 0001234567)"],"file_date":"2026-09-20","form":"D"}},
+ {"_id":"0009999999-26-000002:primary_doc.xml","_source":{"adsh":"0009999999-26-000002","ciks":["0009999999"],"display_names":["Acme Design Fund II LP  (CIK 0009999999)"],"file_date":"2026-09-21","form":"D"}}]}}
