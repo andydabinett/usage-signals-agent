@@ -1,6 +1,6 @@
 # Usage Signals Agent
 
-**Live demo:** `<LIVE_LINK_PLACEHOLDER>` (live view at `/`, labeled SYNTHETIC demo scenario at `/demo`)
+**Live demo:** https://usage-signals-agent-production.up.railway.app (live view at `/`, labeled SYNTHETIC demo scenario at `/demo`)
 
 **The pitch.** Figma's agent went GA on Oct 6, and the best expansion conversations start from evidence the customer already put in public.
 This agent watches real public signals for companies that publicly document their Figma use: design and AI-agent hiring on Greenhouse,
