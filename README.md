@@ -5,10 +5,13 @@ that appear in Figma's own customer stories. Seats and usage are a **clearly lab
 
 > Demo story: *"The Figma agent went GA on Oct 6. Which real companies show public intent, and what would a rep say, with receipts?"*
 
-**Status:** private repo, nothing deployed. The offline snapshot (`snapshot/`) is **pending**: it is frozen only after a human reviews
-the live pull (`signals explain` for every flagged account). Until then, run the demo with `--db data/warehouse.duckdb`.
+**Status:** private repo, nothing deployed. `snapshot/` was **frozen on Oct 10, 2026** (as_of 2026-10-10) after Chief of Staff - Coding
+approved the manual review. Flagged: **Okta, Affirm, Zapier**; at risk: **Brex**. All offline commands default to the snapshot.
 
 ## Live result vs demo scenario
+
+**Frozen live result (scoring v2 + qualification + word-set dedupe, Oct 10):** flagged Okta (75), Affirm (48), Zapier (48); at risk Brex.
+Adyen dropped out once its "Senior Designer, Digital" / "Senior Digital Designer" pair counted as one role. Earlier history below.
 
 **Live (honest) result, Oct 10 r3 pull, 38 accounts, thresholds unchanged:** 0 flagged; at risk: Carta, PostHog, Webflow.
 Near-misses: Instacart 50 and Samsara 50 (both fail `min_growth` 10 and `min_total` 55), then Duolingo, Okta and Robinhood at 36.
@@ -26,6 +29,11 @@ signals demo instacart --db data/warehouse.duckdb --out data/demo.duckdb
 signals handoff instacart --refresh --db data/demo.duckdb
 signals web --db data/demo.duckdb --out out/demo/index.html
 ```
+
+## Dedupe
+
+Same account + same normalized title within 14 days = one role (earliest date kept; all URLs listed). The normalized title is the
+*set* of words (lowercase; punctuation, parentheticals and word order ignored), so "Senior Designer, Digital" == "Senior Digital Designer".
 
 ## Matching rule (AI prototyping / vibe coding)
 
@@ -77,7 +85,7 @@ The accounts are real public companies that appear in Figma's own [customer stor
 ```bash
 uv sync
 uv run pytest                        # network disabled by a socket guard; HTTP mocked with respx
-uv run signals score --all           # default: snapshot/warehouse.duckdb (pending freeze; use --db data/warehouse.duckdb)
+uv run signals score --all           # default: snapshot/warehouse.duckdb (frozen Oct 10, 2026)
 uv run signals explain <account_id>
 uv run signals handoff <account_id>  # served from the cached `handoffs` table, no API key needed
 uv run signals web                   # writes out/index.html (self-contained)
@@ -145,7 +153,9 @@ Known limitation: the post date is `COALESCE(first published, updated)`. Some bo
 
 Handoffs (`anthropic/claude-sonnet-5.5`, strict JSON schema, `reasoning.effort=low`, override with `HANDOFF_MODEL`) are checked in code:
 every sentence of *why this account* / *why now* ends with `[n]` mapping to a `signal_id` in the facts; every citation URL is in the facts;
-every number is in the facts allow-list; proxy numbers carry "(proxy)"; role titles exist in `contacts`; no `@`/phone patterns (a
+every number is in the facts allow-list AND in the source(s) cited by its own sentence (headcount is a cited `employees:` source, e.g.
+Affirm's 10-K); synthetic stand-in numbers carry "(synthetic stand-in)"; when agent-design or Figma Make posts exist (`lead_with`),
+*why now* must cite one of them first and, for agent-design, the first line must speak to AI agents; role titles exist in `contacts`; no `@`/phone patterns (a
 person-name heuristic warns). On failure: retry once with the errors, then fall back to a deterministic template.
 
 ## Swapping in Snowflake

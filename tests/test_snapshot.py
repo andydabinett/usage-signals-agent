@@ -1,4 +1,4 @@
-"""Criteria 3 + 4. PENDING until Chief of Staff - Coding approves the manual review and `signals freeze` is run."""
+"""Criteria 3 + 4, against the frozen snapshot (frozen Oct 10, 2026 after CoS approval)."""
 import json
 
 import pytest

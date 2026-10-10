@@ -1,0 +1,61 @@
+{
+  "as_of": "2026-10-10",
+  "at_risk": [
+    "brex"
+  ],
+  "flagged": [
+    "okta",
+    "affirm",
+    "zapier"
+  ],
+  "source_counts": {
+    "accounts": 38,
+    "contacts": 27,
+    "enrichment": 35,
+    "funding": 5,
+    "job_posts": 6213,
+    "mentions": 212,
+    "news": 0,
+    "raw_pulls": 281
+  },
+  "totals": {
+    "adyen": 25,
+    "affirm": 48,
+    "asana": 20,
+    "brex": 0,
+    "carta": 20,
+    "cloudflare": 30,
+    "coinbase": 20,
+    "crunchyroll": 20,
+    "customerio": 0,
+    "datadog": 20,
+    "discord": 40,
+    "dropbox": 30,
+    "duolingo": 20,
+    "gitlab": 20,
+    "gusto": 0,
+    "headspace": 0,
+    "hellofresh": 20,
+    "insiderone": 25,
+    "instacart": 25,
+    "intercom": 25,
+    "linear": 20,
+    "lyft": 25,
+    "monzo": 20,
+    "mozilla": 20,
+    "notion": 5,
+    "okta": 75,
+    "pinterest": 20,
+    "plaid": 20,
+    "posthog": 0,
+    "ramp": 15,
+    "reddit": 20,
+    "robinhood": 25,
+    "samsara": 25,
+    "stripe": 35,
+    "supabase": 15,
+    "twilio": 15,
+    "webflow": 15,
+    "zapier": 48
+  }
+}
