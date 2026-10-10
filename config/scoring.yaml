@@ -1,17 +1,27 @@
-# All scoring weights and thresholds. sql/score_accounts.sql reads these as params; no SQL edits needed.
+# Scoring v2 (Oct 10, 2026): REAL public signals drive the flag. Reasoning for every threshold: README "Scoring".
+# Thresholds were set once, before scoring live data, and committed on their own. Do not tune them to hit a count.
 ga_date: "2026-10-06"
-growth:   {t1: 1.00, p1: 25, t2: 0.50, p2: 18, t3: 0.20, p3: 10}
-breadth:  {min_active: 5, t1: 0.60, p1: 20, t2: 0.40, p2: 12, t3: 0.20, p3: 4}
-agent:    {min_seats: 5, p_new: 20, p_seats: 12, p_some: 4}
-fit:
-  mid_lo: 200
-  mid_hi: 5000
-  p_mid: 10
-  p_large: 8
-  small_lo: 50
-  p_small: 5
-  funding_days: 180
-  p_funding: 10
-intent:   {window_days: 30, p_make: 15, min_figma: 2, p_figma2: 8, p_figma1: 4}
-flag:     {min_total: 55, min_growth: 10, min_fit: 5, min_real_signals: 1}
-at_risk:  {max_growth: -0.30, min_e1: 100}
+real:
+  window_days: 30          # "now" window
+  prior_days: 60           # baseline window (days 31-90 before AS_OF)
+  intent_days: 90          # HN mention window
+  funding_days: 180        # Form D window
+  gates:
+    min_hiring_30d: 2          # >=2 qualifying AI/design posts in 30d (one post is noise)
+    min_momentum_ratio: 1.5    # 30d count >= 1.5x the prior-60d monthly rate ...
+    momentum_floor: 1.0        # ... with that monthly rate floored at 1 post/month
+    min_employees: 200         # Org/Enterprise-sized design teams; employees must be wikidata or manual_public
+    min_recent_real_cited: 1   # >=1 non-synthetic cited signal with a URL in the last 30d
+  points:                      # ranking only (the flag is the gates above)
+    hiring_per_post: 5
+    hiring_post_cap: 5
+    hiring_make_bonus: 10      # >=1 Figma Make / AI-prototyping / design-for-AI-agents post in 30d
+    momentum: {t1: 3.0, p1: 25, t2: 2.0, p2: 18, t3: 1.5, p3: 12}
+    fit: {mid_lo: 200, mid_hi: 5000, p_mid: 20, p_large: 15, small_lo: 50, p_small: 5}
+    intent: {hn_each: 5, hn_cap: 2, p_formd: 10}
+  cooling: {min_prior60: 4, max_30d: 0}   # real "at risk": steady prior hiring that stopped
+# CONTEXT ONLY (synthetic stand-ins): shown labeled, never part of total, flag or at-risk.
+context:
+  growth:   {t1: 1.00, p1: 25, t2: 0.50, p2: 18, t3: 0.20, p3: 10}
+  breadth:  {min_active: 5, t1: 0.60, p1: 20, t2: 0.40, p2: 12, t3: 0.20, p3: 4}
+  agent:    {min_seats: 5, p_new: 20, p_seats: 12, p_some: 4}

@@ -40,10 +40,10 @@ Figma's [Marketing Engineer, AI Deployment posting](https://boards.greenhouse.io
 
 - **Warehouse-first signals.** In the [Clay customer story](https://www.clay.com/customers/figma), product signals like "seat growth, feature adoption, and component usage patterns exist in Snowflake," and routing them into Salesforce "created bloat." The [Confessions of a CRM](https://open.spotify.com/episode/2tSb5dugcpdDxy48eC5JQt) host [summarized](https://www.linkedin.com/posts/anderskrohn_it-was-great-to-speak-with-kyle-ketchum-about-activity-7450122552884019200-ecs5) the shift as "treating the data warehouse as the source of truth." → All scoring is Snowflake-compatible SQL behind an adapter.
 - **Enrichment plus product activity.** Kyle combines "product-qualified activity with tech stack data, funding signals, and hiring patterns" ([Clay](https://www.clay.com/customers/figma)). → Real hiring posts that mention Figma Make or AI prototyping, real funding filings, and public firmographics, joined to a clearly labeled usage proxy where no public data exists.
-- **Signal-based selling.** The RevFest 2026 talk ["The GTM Engine Nobody Asked For"](https://www.linkedin.com/posts/andrewmattock_when-jen-igartua-first-asked-me-to-speak-activity-7459992646762151937-QXIL) was pitched at "where to start with a signal-based selling architecture." → Five explainable signals, a written-down flag rule, and an `explain` command with source links.
+- **Signal-based selling, real signals first.** A rep acts on a reason they can open and check. So v2 flags an account only when *public, cited* signals line up: AI/design hiring, momentum against its own baseline, and a sourced company size. Synthetic usage is shown as context because Figma's real product data would replace it inside the warehouse, but it never decides who gets a call. The RevFest 2026 talk ["The GTM Engine Nobody Asked For"](https://www.linkedin.com/posts/andrewmattock_when-jen-igartua-first-asked-me-to-speak-activity-7459992646762151937-QXIL) was pitched at "where to start with a signal-based selling architecture." → Four real gates with written-down thresholds and reasons, and an `explain` command with source links.
 - **Agents a team can trust.** The posting asks you to "Define evaluation criteria, instrument AI workflows." → Handoffs cite every claim, invent no numbers, and contain no personal data, all enforced in code.
 
-The accounts are real public companies that appear in Figma's own [customer stories](https://www.figma.com/customers/). Usage numbers are a synthetic proxy and are labeled that way everywhere.
+The accounts are real public companies that appear in Figma's own [customer stories](https://www.figma.com/customers/). Usage numbers are a synthetic stand-in, labeled that way everywhere, and never decide a flag.
 
 ## Real vs. proxy
 
@@ -51,14 +51,14 @@ The accounts are real public companies that appear in Figma's own [customer stor
 |---|---|---|
 | account name, domain, Figma customer-story URL and title, products mentioned (Make, Dev Mode, AI, MCP) | **Real** | Hand-curated `seeds/figma_customer_stories.csv`: Figma customer stories/blog plus public non-Figma sources (company blogs, handbooks, GitHub, conference talks); `source_type` per row. Never fetched by code |
 | open roles; roles mentioning "Figma" / "Figma Make" / "AI prototyping" / "vibe coding"; posting dates; role titles | **Real** | [Greenhouse](https://developers.greenhouse.io/job-board.html), [Lever](https://github.com/lever/postings-api), [Ashby](https://developers.ashbyhq.com/docs/public-job-posting-api) public job APIs |
-| hiring velocity (roles published last 14 days vs. the 14–28 days before) | **Real (derived)** | Same job APIs |
+| hiring momentum (qualifying posts in the last 30 days vs. the prior 60) | **Real (derived), drives the flag** | Same job APIs |
 | last funding date (US) | **Real** | [SEC EDGAR](https://efts.sec.gov/LATEST/search-index) Form D full-text search (kept; 0 Form D hits for the current universe, which is mostly public or late-stage companies) |
 | funding and launch news mentions | **Dropped for v1** | [GDELT DOC 2.0 API](https://blog.gdeltproject.org/gdelt-doc-2-0-api-debuts/): two live pulls (5 s, then ≥10 s spacing with backoff) got 429 on about half the queries and empty results on the rest. The module stays and runs only with `--only news_gdelt` |
 | HN mentions of company + Figma | **Real** | [HN Algolia API](https://hn.algolia.com/api) |
 | employee count, industry, HQ country, website | **Real** (Wikidata, else hand-entered with a public source, else NULL) | [Wikidata](https://www.wikidata.org/) `Special:EntityData/<QID>.json` for hand-mapped QIDs (robots.txt disallows `/w/api.php` and `query.wikidata.org/sparql`); `seeds/manual_employees.csv` (`source=manual_public`: 10-K, annual report or the company's own page) |
 | contact role titles | **Real** (titles only) | Customer-story speaker titles (`seeds/story_contacts.csv`), manual snippets, or "Hiring team for: <role>" from the account's own job post |
-| paid seats, active seats, daily Make and agent events | **Synthetic proxy** | `signals/proxy.py`, seeded from real signal dates |
-| Figma agent first-use date | **Synthetic proxy** (gated by real Make/AI evidence) | `signals/proxy.py` |
+| paid seats, active seats, daily Make and agent events | **Synthetic stand-in, CONTEXT ONLY** (never affects flag, total or at-risk) | `signals/proxy.py`, seeded from real signal dates |
+| Figma agent first-use date | **Synthetic stand-in, CONTEXT ONLY** | `signals/proxy.py` |
 | owner_rep | Always NULL | CRM owner unknown for real companies → every handoff goes to "PLG / unowned queue (demo)" |
 
 ## Data ethics
@@ -98,18 +98,35 @@ Cadences (documented, not scheduled): job boards / GDELT / HN daily; Wikidata, w
 
 ## Scoring
 
-`sql/score_accounts.sql`, constants in `config/scoring.yaml` (change a weight → totals change, no SQL edit). Max 100:
+**v2 (Oct 10, 2026, Andy's decision): real public signals decide the flag.** Synthetic seats and usage are context only.
+`sql/score_accounts.sql` reads every constant from `config/scoring.yaml`. These thresholds were set once, from first principles,
+and committed together with this README section **before** v2 was run on live data. They are not tuned to hit a flag count.
 
-| Component | Inputs | Points | Max |
+**Flag = every gate passes:**
+
+| Gate (all real) | Measure | Threshold | Why this number |
 |---|---|---|---|
-| Usage growth WoW (proxy) | g = (E0 − E1) / max(E1, 1) | ≥1.00 → 25 · ≥0.50 → 18 · ≥0.20 → 10 | 25 |
-| Seat breadth (proxy) | active_w0 / paid_seats | 0 if active < 5; ≥0.60 → 20 · ≥0.40 → 12 · ≥0.20 → 4 | 20 |
-| Agent adoption newness (proxy, gated by real evidence) | agent seats W0, first agent date vs GA (2026-10-06) | ≥5 & new → 20 · ≥5 → 12 · 1–4 → 4 | 20 |
-| Fit (real) | employees, last funding | 200–5,000 → 10 · >5,000 → 8 · 50–199 → 5; +10 if funded in last 180 days | 20 |
-| Public intent (real) | job posts in last 30 days | ≥1 Make/AI role → 15 · ≥2 Figma roles → 8 · 1 → 4 | 15 |
+| AI/design hiring | open posts in the last 30 days that mention Figma, Figma Make, AI prototyping or vibe coding (matched in context), or design roles for AI agents (title has "design" and "agent") | **≥ 2** | One post can be a backfill, a recruiter template, or one team's habit. Two in a month is the smallest count that suggests a pattern rather than an accident. |
+| Momentum | 30-day count vs. the prior-60-day monthly rate (prior 60 ÷ 2), with that rate floored at 1/month | **ratio ≥ 1.5** | "Now" has to beat the account's own baseline by a margin larger than normal month-to-month noise. With counts this small, +50% is the smallest lift that isn't one extra post. The floor stops 1-vs-0 from reading as infinite growth. |
+| Company fit | employee count from Wikidata or `manual_public` (10-K, annual report, company page); snippets and estimates don't count | **≥ 200** | About where a company has a dedicated design org, several squads and procurement, so Figma Organization/Enterprise and agent rollout is a sales motion and not a self-serve Pro upgrade. Unknown counts fail: no fit without a source. No upper cap, because large companies buy too. |
+| Recent cited signal | non-synthetic signals with a URL in the last 30 days | **≥ 1** | Every flag must have a dated, clickable reason a rep can open. |
 
-**Flag:** `total ≥ 55 AND growth ≥ 10 AND fit ≥ 5 AND real_signals_30d ≥ 1`. **At risk:** `g ≤ −0.30 AND E1 ≥ 100`.
-`AS_OF` is the snapshot date in `snapshot_meta` (never `CURRENT_DATE`); override with `--as-of`.
+**Points (0–100) only rank accounts.** They never decide the flag:
+hiring 5/post (capped at 5 posts) plus 10 if any post is Make/AI/agent-design (max 35); momentum ratio ≥3 → 25, ≥2 → 18, ≥1.5 → 12;
+fit 200–5,000 → 20, >5,000 → 15, 50–199 → 5; public intent: 5 per HN mention in 90 days (max 2) plus 10 for a Form D in 180 days (max 20).
+Public intent is **not a gate**. HN and Form D coverage is sparse and depends on press attention, so gating on it would mostly measure
+how famous a company is. Blog mentions have no ingest source yet.
+
+**At risk (real, "cooling"):** ≥ 4 qualifying posts in the prior 60 days and 0 in the last 30.
+
+**Context only (synthetic stand-ins, labeled everywhere):** usage growth WoW, seat breadth, agent adoption (the v1 point tables).
+They're shown in `score`/`explain`/web and may appear in a handoff labeled "(synthetic stand-in)". They never enter total, flag or at-risk.
+`tests/test_scoring_fixture.py::test_changing_synthetic_values_never_changes_flag_outcome` rewrites the synthetic usage and seats six ways and checks that
+flags, at-risk and totals stay identical.
+
+Every sub-score, its value and its threshold is printed by `signals score --all` and `signals explain <id>`, and shown on the web page.
+`AS_OF` is the snapshot date in `snapshot_meta` (never `CURRENT_DATE`); override it with `--as-of`.
+Known limitation: the post date is `COALESCE(first published, updated)`. Some boards only give an updated date, and a re-edited old post can look new.
 
 ## Grounding
 
