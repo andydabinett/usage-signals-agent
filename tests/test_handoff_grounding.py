@@ -18,6 +18,8 @@ FACTS = {
                         "paid_seats": 20, "agent_seats_w0": 4}},
     "enrichment": {"employees": 850, "industry": "software", "country": "United States"},
     "sources": [{"signal_id": "story:acme", "kind": "story", "date": None, "title": "How Acme ships faster", "url": "https://www.figma.com/customers/acme-story/"},
+                {"signal_id": "job:greenhouse:90", "kind": "job_figma", "date": "2026-08-05", "title": "Lead Designer",
+                 "url": "https://boards.greenhouse.io/acme/jobs/90"},
                 {"signal_id": "job:greenhouse:101", "kind": "job_make", "date": "2026-10-02", "title": "Senior Product Designer",
                  "url": "https://boards.greenhouse.io/acme/jobs/101"}],
     "contacts": [{"role_title": "Head of Design", "source_url": "https://www.figma.com/customers/acme-story/"}],
@@ -95,3 +97,41 @@ def test_cached_snapshot_handoffs_pass_grounding():
     for r in rows:
         h = ho.cached(wh, r["account_id"])
         assert ho.check(h["output"], h["facts"])["ok"], r["account_id"]
+
+
+def _cits():
+    return [{"n": 1, "signal_id": "story:acme", "url": "https://www.figma.com/customers/acme-story/"},
+            {"n": 2, "signal_id": "job:greenhouse:101", "url": "https://boards.greenhouse.io/acme/jobs/101"},
+            {"n": 3, "signal_id": "job:greenhouse:90", "url": "https://boards.greenhouse.io/acme/jobs/90"}]
+
+
+def test_followed_pointing_backwards_rejected():
+    # the Datadog live-pull bug: a 2026-08-05 role "followed" a 2026-10-05 role
+    bad = mutate(why_now="Acme posted a Senior Product Designer role on 2026-10-02 [2]. A Lead Designer role followed on 2026-08-05 [3].",
+                 citations=_cits())
+    rep = ho.check(bad, FACTS)
+    assert not rep["ok"] and any("forward" in e for e in rep["errors"])
+
+
+def test_correct_order_passes():
+    ok = mutate(why_now="Acme posted a Lead Designer role on 2026-08-05 [3]. A Senior Product Designer role followed on 2026-10-02 [2].",
+                citations=_cits())
+    rep = ho.check(ok, FACTS)
+    assert rep["ok"], rep["errors"]
+
+
+def test_wrong_stated_date_latest_and_recent_rejected():
+    errs = ho.check(mutate(why_now="Acme posted a Senior Product Designer role on Oct 9 [2].", citations=_cits()), FACTS)["errors"]
+    assert any("stated date" in e for e in errs)
+    errs = ho.check(mutate(why_now="Its latest role is a Lead Designer [3].", citations=_cits()), FACTS)["errors"]
+    assert any("latest" in e for e in errs)
+    errs = ho.check(mutate(why_now="It recently posted a Lead Designer role [3].", citations=_cits()), FACTS)["errors"]
+    assert any("recent" in e for e in errs)
+
+
+def test_build_facts_sorts_sources_by_date(fixture_db):
+    import datetime as dt
+    from signals.warehouse import open_wh
+    facts = ho.build_facts(open_wh(fixture_db, read_only=True), "acme", dt.date(2026, 10, 10))
+    dates = [s["date"] for s in facts["sources"][1:]]
+    assert dates == sorted(dates) and facts["sources"][0]["kind"] == "story"

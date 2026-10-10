@@ -48,6 +48,9 @@ def pull(wh, accounts, since=None, client=None, seeds_dir=None, as_of: dt.date |
         name = legal.get(a["account_id"]) or a["account_name"]
         resp = client.get(URL, source="funding_edgar", params={
             "q": f'"{name}"', "forms": "D", "startdt": (as_of - dt.timedelta(days=365)).isoformat(), "enddt": as_of.isoformat()})
+        if resp is not None and resp.status_code == 403:
+            client.errors.append("funding_edgar: 403 on first request; stopping EDGAR for this run (no retries, no header changes)")
+            break
         if resp is None or resp.status_code != 200:
             continue
         done.append(a["account_id"])

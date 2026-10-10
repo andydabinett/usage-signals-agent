@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /w/api.php?action=mobileview&
+Disallow: /w/
+Disallow: /api/
+Disallow: /wiki/Special%3A
+Disallow: /wiki/Special:EntityData/
+Allow: /wiki/Special:EntityData/*.

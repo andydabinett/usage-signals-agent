@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS job_posts (signal_id VARCHAR, account_id VARCHAR, ats
 CREATE TABLE IF NOT EXISTS funding (signal_id VARCHAR, account_id VARCHAR, source VARCHAR, filed_on DATE, url VARCHAR, round_label VARCHAR, amount_usd DOUBLE);
 CREATE TABLE IF NOT EXISTS news (signal_id VARCHAR, account_id VARCHAR, source VARCHAR, url VARCHAR, title VARCHAR, seen_on DATE, tag VARCHAR);
 CREATE TABLE IF NOT EXISTS mentions (signal_id VARCHAR, account_id VARCHAR, source VARCHAR, url VARCHAR, title VARCHAR, created_on DATE, points INTEGER);
-CREATE TABLE IF NOT EXISTS enrichment (account_id VARCHAR, employees INTEGER, employees_source_url VARCHAR, industry VARCHAR, country VARCHAR, website VARCHAR, qid VARCHAR, retrieved_on DATE);
+CREATE TABLE IF NOT EXISTS enrichment (account_id VARCHAR, employees INTEGER, employees_source_url VARCHAR, employees_source VARCHAR, industry VARCHAR, country VARCHAR, website VARCHAR, qid VARCHAR, retrieved_on DATE);
 CREATE TABLE IF NOT EXISTS website_meta (account_id VARCHAR, url VARCHAR, page_title VARCHAR, meta_description VARCHAR, og_site VARCHAR, ats_hint VARCHAR, retrieved_on DATE);
 CREATE TABLE IF NOT EXISTS manual_snippets (account_id VARCHAR, url VARCHAR, snippet VARCHAR, query VARCHAR, collected_on DATE, kind VARCHAR);
 CREATE TABLE IF NOT EXISTS contacts (account_id VARCHAR, role_title VARCHAR, source_url VARCHAR);

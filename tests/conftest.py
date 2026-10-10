@@ -33,13 +33,14 @@ def jload(name):
 
 
 def mock_all(router: respx.Router) -> None:
+    router.get("https://www.wikidata.org/robots.txt").mock(return_value=httpx.Response(200, text=(HTTP / "wikidata_robots.txt").read_text()))
     router.get(url__regex=r".*/robots\.txt$").mock(return_value=httpx.Response(404))
+    for q in ("Q1", "Q2", "Q30", "Q880371"):
+        router.get(f"https://www.wikidata.org/wiki/Special:EntityData/{q}.json").mock(
+            return_value=httpx.Response(200, json=jload(f"wikidata_entity_{q}.json")))
     router.get(url__regex=r"https://boards-api\.greenhouse\.io/v1/boards/acme/jobs.*").mock(return_value=httpx.Response(200, json=jload("greenhouse_jobs.json")))
     router.get(url__regex=r"https://api\.lever\.co/v0/postings/bolt.*").mock(return_value=httpx.Response(200, json=jload("lever_postings.json")))
     router.get(url__regex=r"https://api\.ashbyhq\.com/posting-api/job-board/acme.*").mock(return_value=httpx.Response(200, json=jload("ashby_jobs.json")))
-    router.get(url__regex=r"https://www\.wikidata\.org/w/api\.php.*search=Acme.*").mock(return_value=httpx.Response(200, json=jload("wikidata_search.json")))
-    router.get(url__regex=r"https://www\.wikidata\.org/w/api\.php.*").mock(return_value=httpx.Response(200, json={"search": []}))
-    router.get(url__regex=r"https://query\.wikidata\.org/sparql.*").mock(return_value=httpx.Response(200, json=jload("wikidata_sparql.json")))
     router.get("https://acme.example/").mock(return_value=httpx.Response(200, text=(HTTP / "website_home.html").read_text(), headers={"content-type": "text/html"}))
     router.get(url__regex=r"https://efts\.sec\.gov/LATEST/search-index.*Acme.*").mock(return_value=httpx.Response(200, json=jload("edgar_formd.json")))
     router.get(url__regex=r"https://efts\.sec\.gov/.*").mock(return_value=httpx.Response(200, json={"hits": {"hits": []}}))

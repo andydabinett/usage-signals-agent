@@ -1,7 +1,8 @@
 """The one polite HTTP client used by every ingest module (D11).
 
 - Honest User-Agent with repo URL + CONTACT_EMAIL. Never spoofs a browser UA, never retries a 403 with other headers.
-- robots.txt via urllib.robotparser *and* a wildcard-aware matcher (stdlib ignores `*` / `$`); either disallow => skip.
+- robots.txt: an RFC 9309 longest-match matcher with `*`/`$` wildcards and percent-decoding decides allow/deny
+  (urllib.robotparser is first-match and ignores wildcards, so it is only used for Crawl-delay).
   robots.txt fetch semantics follow RFC 9309: 2xx parse, 4xx => allow all, 5xx/network error => disallow all.
 - Per-host rate limit (config/sources.yaml; robots Crawl-delay honoured if larger).
 - Retries 429 / 5xx up to 3 times with backoff (Retry-After respected).
@@ -19,7 +20,7 @@ import urllib.robotparser
 from collections import Counter
 from dataclasses import dataclass, field
 from typing import Any, Callable
-from urllib.parse import urljoin, urlsplit
+from urllib.parse import unquote, urljoin, urlsplit
 
 import httpx
 
@@ -55,6 +56,7 @@ def is_denied(host: str, denylist: list[str]) -> bool:
 
 # ---------- robots ----------
 def _rule_regex(path: str) -> re.Pattern:
+    path = unquote(path)
     anchored = path.endswith("$")
     if anchored:
         path = path[:-1]
@@ -132,8 +134,7 @@ class Robots:
             return False
         parts = urlsplit(url)
         path = (parts.path or "/") + (("?" + parts.query) if parts.query else "")
-        std_ok = self.std.can_fetch(ua, url) if self.std else True
-        return std_ok and self.wildcard_allowed(path)
+        return self.wildcard_allowed(unquote(path))
 
 
 # ---------- client ----------
@@ -189,8 +190,16 @@ class PoliteClient:
                 self.sleep(gap)
         self._last[host] = self.clock()
 
+    def _ua_for(self, host: str) -> str | None:
+        # SEC fair-access policy documents "Name email" as the declared UA format; supplied via env only (never committed)
+        if (host == "sec.gov" or host.endswith(".sec.gov")) and os.environ.get("SEC_USER_AGENT"):
+            return os.environ["SEC_USER_AGENT"]
+        return None
+
     def _send(self, method: str, url: str, **kw) -> httpx.Response:
         host = urlsplit(url).hostname or ""
+        if (ua := self._ua_for(host)):
+            kw.setdefault("headers", {})["User-Agent"] = ua
         self._wait(host)
         self.request_log.append((url, self.clock()))
         self.counts[host] += 1
@@ -270,8 +279,9 @@ class PoliteClient:
                 if attempt == self.max_retries:
                     return resp
                 ra = resp.headers.get("retry-after")
-                wait = float(ra) if ra and ra.isdigit() else self.backoff_base * (2 ** attempt)
-                self.sleep(min(wait, 60.0))
+                host = urlsplit(url).hostname or ""
+                wait = float(ra) if ra and ra.isdigit() else max(self.backoff_base, self._delay_for(host)) * (2 ** attempt)
+                self.sleep(min(wait, 120.0))
                 continue
             return resp  # includes 403: recorded, never retried with different headers
         return None

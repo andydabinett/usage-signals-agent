@@ -1,0 +1,3 @@
+account_id,employees,source_url,source,collected_on,note
+bolt,420,https://bolt.example/about,manual_public,2026-10-10,About page
+acme,999,https://acme.example/about,manual_public,2026-10-10,ignored because Wikidata has a count

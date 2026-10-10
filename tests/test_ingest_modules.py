@@ -6,7 +6,7 @@ import respx
 
 from conftest import AS_OF, SEEDS, make_client, mock_all
 from signals.ingest import (enrich_website, enrich_wikidata, figma_customers_seed, funding_edgar, jobs_ashby, jobs_greenhouse,
-                            jobs_lever, manual_snippets, mentions_hn, news_gdelt)
+                            jobs_lever, manual_employees, manual_snippets, mentions_hn, news_gdelt)
 from signals.warehouse import open_wh
 
 
@@ -64,6 +64,7 @@ def test_wikidata():
     wh, n = run(enrich_wikidata, today=AS_OF)
     r = wh.query("SELECT * FROM enrichment")[0]
     assert n == 1 and r["qid"] == "Q2" and r["employees"] == 850 and r["industry"] == "software industry"
+    assert r["country"] == "United States" and r["employees_source"] == "wikidata"
     assert r["employees_source_url"] == "https://www.wikidata.org/wiki/Q2"
 
 
@@ -101,3 +102,33 @@ def test_manual_snippets_employee_range():
     assert wh.query("SELECT employees, employees_source_url FROM enrichment WHERE account_id='bolt'") == \
         [{"employees": 350, "employees_source_url": "https://www.example.com/search-result"}]
     assert manual_snippets.parse_employees("1,001-5,000 employees") == 3000
+
+
+def test_wikidata_only_entitydata_path_is_requested():
+    wh, accts = setup()
+    with respx.mock(assert_all_called=False) as r:
+        mock_all(r)
+        c = make_client(wh)
+        enrich_wikidata.pull(wh, accts, None, client=c, seeds_dir=SEEDS, today=AS_OF)
+        urls = [str(call.request.url) for call in r.calls]
+    assert all("/w/api.php" not in u and "query.wikidata.org" not in u for u in urls)
+    assert c.robots_skips == []
+
+
+def test_manual_employees_fill_only_missing():
+    wh, _ = setup()
+    wh.load_rows("enrichment", [{"account_id": "acme", "employees": 850, "employees_source": "wikidata"}])
+    assert manual_employees.pull(wh, seeds_dir=SEEDS) == 1
+    rows = {r["account_id"]: r for r in wh.query("SELECT * FROM enrichment")}
+    assert rows["bolt"]["employees"] == 420 and rows["bolt"]["employees_source"] == "manual_public"
+    assert rows["bolt"]["employees_source_url"] == "https://bolt.example/about"
+    assert rows["acme"]["employees"] == 850
+
+
+def test_edgar_stops_after_first_403():
+    wh, accts = setup()
+    with respx.mock(assert_all_called=False) as r:
+        r.get(url__regex=r".*/robots\.txt$").mock(return_value=httpx.Response(404))
+        route = r.get(url__regex=r"https://efts\.sec\.gov/LATEST/.*").mock(return_value=httpx.Response(403, text="Undeclared"))
+        n = funding_edgar.pull(wh, accts, None, client=make_client(wh), seeds_dir=SEEDS, as_of=AS_OF)
+    assert n == 0 and route.call_count == 1

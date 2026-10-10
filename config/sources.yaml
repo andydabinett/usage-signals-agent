@@ -1,7 +1,7 @@
 # Per-host minimum seconds between requests (robots Crawl-delay is honoured if larger).
 default_delay: 1.0
 host_delays:
-  api.gdeltproject.org: 5.0
+  api.gdeltproject.org: 10.0
   efts.sec.gov: 0.25
   www.sec.gov: 0.25
 denylist: ["figma.com", "linkedin.com"]

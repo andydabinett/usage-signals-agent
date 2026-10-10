@@ -46,7 +46,10 @@ Rules (enforced by code; violations are rejected):
 - Use only numbers that appear in the facts. Any number from facts.score.proxy must be followed by "(proxy)".
 - who_to_contact: 1-2 entries copied exactly from facts.contacts (role_title + source_url). Never name individuals.
 - No emails, phone numbers or person names. Do not claim the account is a Figma customer beyond what its story shows.
-- numbers_cited lists every number you used, as written."""
+- numbers_cited lists every number you used, as written.
+- facts.sources (after the customer story) are sorted oldest to newest by date. Any stated date must equal the cited
+  source's date; words like "followed/then/later" must point forward in time, "earlier/previously" backward, "latest/most
+  recent" only at the newest dated source, and "recent/recently" only within 30 days of as_of."""
 
 
 # ---------- facts ----------
@@ -58,8 +61,10 @@ def build_facts(wh, account_id: str, as_of: dt.date) -> dict:
                     "AND signal_date <= %(as_of)s", {"a": account_id, "as_of": as_of})
     sigs.sort(key=lambda s: (KIND_RANK.get(s["kind"], 9), -(s["signal_date"].toordinal() if s["signal_date"] else 0)))
     sources = [{"signal_id": f"story:{account_id}", "kind": "story", "date": None, "title": acct["story_title"], "url": acct["story_url"]}]
+    top = sorted(sigs[:6], key=lambda s: (s["signal_date"] or dt.date.min, s["signal_id"]))  # oldest -> newest (D8 order check)
     sources += [{"signal_id": s["signal_id"], "kind": s["kind"], "date": s["signal_date"].isoformat() if s["signal_date"] else None,
-                 "title": s["title"], "url": s["url"]} for s in sigs[:6]]
+                 "days_before_as_of": (as_of - s["signal_date"]).days if s["signal_date"] else None,
+                 "title": s["title"], "url": s["url"]} for s in top]
     contacts = wh.query("SELECT role_title, source_url FROM contacts WHERE account_id = %(a)s ORDER BY role_title", {"a": account_id})[:2]
     g = float(row["g"])
     return {
@@ -125,8 +130,54 @@ def sentences(text: str) -> list[str]:
     return [s.strip() for s in re.split(r"(?<=[.!?])\s+(?=[A-Z\"'])", text.strip()) if s.strip()]
 
 
+MONTHS = {m: i for i, m in enumerate(["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"], 1)}
+ISO_RX = re.compile(r"\b(\d{4})-(\d{2})-(\d{2})\b")
+MDY_RX = re.compile(r"\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\.? (\d{1,2})(?:st|nd|rd|th)?(?:,? (\d{4}))?\b")
+FORWARD = re.compile(r"\b(followed|then|later|subsequently|afterwards|after that|since then)\b", re.I)
+BACKWARD = re.compile(r"\b(earlier|previously|before that|prior to that)\b", re.I)
+LATEST = re.compile(r"\b(latest|most recent|newest)\b", re.I)
+RECENT = re.compile(r"\b(recent|recently|this week|this month|just posted)\b", re.I)
+
+
+def check_chronology(out: dict, facts: dict) -> list[str]:
+    """Reject stated order/recency that contradicts the cited signal dates."""
+    errs: list[str] = []
+    sdate = {s["signal_id"]: dt.date.fromisoformat(s["date"]) for s in facts["sources"] if s.get("date")}
+    cdate = {c["n"]: sdate.get(c["signal_id"]) for c in out.get("citations", [])}
+    as_of = dt.date.fromisoformat(facts["as_of"])
+    newest = max(sdate.values()) if sdate else None
+    for field in ("why_this_account", "why_now"):
+        prev: list[dt.date] = []
+        for sent in sentences(out.get(field, "")):
+            ds = [d for d in (cdate.get(int(n)) for n in CITE_RX.findall(sent)) if d]
+            stated = [dt.date(int(y), int(m), int(d)) for y, m, d in ISO_RX.findall(sent)]
+            for mon, day, yr in MDY_RX.findall(sent):
+                try:
+                    stated.append(dt.date(int(yr) if yr else as_of.year, MONTHS[mon[:3].lower()], int(day)))
+                except ValueError:
+                    pass
+            for d in stated:
+                if d not in ds:
+                    errs.append(f"stated date {d} does not match the cited signal date(s) in: {sent!r}")
+            if ds and prev:
+                if FORWARD.search(sent) and min(ds) < max(prev):
+                    errs.append(f"order word points forward but cited date {min(ds)} is before {max(prev)}: {sent!r}")
+                if BACKWARD.search(sent) and max(ds) > min(prev):
+                    errs.append(f"order word points backward but cited date {max(ds)} is after {min(prev)}: {sent!r}")
+            if ds and len(ds) >= 2 and FORWARD.search(sent) and ds != sorted(ds):
+                errs.append(f"citations in a 'followed/then' sentence are not in date order: {sent!r}")
+            if ds and LATEST.search(sent) and newest and max(ds) != newest:
+                errs.append(f"'latest/most recent' cites {max(ds)} but the newest dated source is {newest}: {sent!r}")
+            if ds and RECENT.search(sent) and max(ds) < as_of - dt.timedelta(days=30):
+                errs.append(f"'recent' cites {max(ds)}, more than 30 days before as_of {as_of}: {sent!r}")
+            if ds:
+                prev = ds
+    return errs
+
+
 def check(out: dict, facts: dict) -> dict:
     errors, warnings = [], []
+    errors += check_chronology(out, facts)
     src = {s["signal_id"]: s["url"] for s in facts["sources"]}
     if out.get("addressed_to") != ADDRESSED_TO:
         errors.append("addressed_to must be the PLG / unowned queue")
@@ -173,13 +224,13 @@ def check(out: dict, facts: dict) -> dict:
 def template(facts: dict) -> dict:
     srcs = facts["sources"]
     story = srcs[0]
-    real = [s for s in srcs[1:]]
+    real = sorted([s for s in srcs[1:] if s.get("date")], key=lambda s: s["date"])
     cits = [{"n": 1, "signal_id": story["signal_id"], "url": story["url"]}]
     why_acct = f"{facts['account_name']} is featured in a public Figma customer story [1]."
     if real:
-        top = real[0]
+        top = real[-1]  # newest dated source
         cits.append({"n": 2, "signal_id": top["signal_id"], "url": top["url"]})
-        why_now = f"Recent {KIND_LABEL.get(top['kind'], top['kind'])} dated {top['date']} [2]."
+        why_now = f"Latest public signal: {KIND_LABEL.get(top['kind'], top['kind'])} dated {top['date']} [2]."
     else:
         why_now = "No dated public signal beyond the customer story [1]."
     who = [{"role_title": c["role_title"], "source_url": c["source_url"], "angle": "Figma agent rollout"} for c in facts["contacts"][:2]]

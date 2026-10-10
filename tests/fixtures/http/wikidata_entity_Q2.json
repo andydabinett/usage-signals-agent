@@ -1,0 +1,6 @@
+{"entities":{"Q2":{"id":"Q2","labels":{"en":{"value":"Acme Design"}},"claims":{
+ "P1128":[{"rank":"normal","mainsnak":{"snaktype":"value","datavalue":{"value":{"amount":"+700"}}},"qualifiers":{"P585":[{"datavalue":{"value":{"time":"+2023-01-01T00:00:00Z"}}}]}},
+          {"rank":"normal","mainsnak":{"snaktype":"value","datavalue":{"value":{"amount":"+850"}}},"qualifiers":{"P585":[{"datavalue":{"value":{"time":"+2025-01-01T00:00:00Z"}}}]}}],
+ "P452":[{"rank":"normal","mainsnak":{"snaktype":"value","datavalue":{"value":{"id":"Q880371"}}}}],
+ "P17":[{"rank":"normal","mainsnak":{"snaktype":"value","datavalue":{"value":{"id":"Q30"}}}}],
+ "P856":[{"rank":"normal","mainsnak":{"snaktype":"value","datavalue":{"value":"https://acme.example"}}}]}}}}

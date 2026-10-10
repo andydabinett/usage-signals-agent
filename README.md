@@ -23,13 +23,13 @@ The accounts are real public companies that appear in Figma's own [customer stor
 
 | Field | Real or proxy | Source |
 |---|---|---|
-| account name, domain, Figma customer-story URL and title, products mentioned (Make, Dev Mode, AI, MCP) | **Real** | Hand-curated `seeds/figma_customer_stories.csv` from [figma.com/customers](https://www.figma.com/customers/) — never fetched by code |
+| account name, domain, Figma customer-story URL and title, products mentioned (Make, Dev Mode, AI, MCP) | **Real** | Hand-curated `seeds/figma_customer_stories.csv`: Figma customer stories/blog plus public non-Figma sources (company blogs, handbooks, GitHub, conference talks); `source_type` per row. Never fetched by code |
 | open roles; roles mentioning "Figma" / "Figma Make" / "AI prototyping" / "vibe coding"; posting dates; role titles | **Real** | [Greenhouse](https://developers.greenhouse.io/job-board.html), [Lever](https://github.com/lever/postings-api), [Ashby](https://developers.ashbyhq.com/docs/public-job-posting-api) public job APIs |
 | hiring velocity (roles published last 14 days vs. the 14–28 days before) | **Real (derived)** | Same job APIs |
-| last funding date (US) | **Real** | [SEC EDGAR](https://efts.sec.gov/LATEST/search-index) Form D full-text search |
-| funding and launch news mentions | **Real** | [GDELT DOC 2.0 API](https://blog.gdeltproject.org/gdelt-doc-2-0-api-debuts/) |
+| last funding date (US) | **Real** | [SEC EDGAR](https://efts.sec.gov/LATEST/search-index) Form D full-text search (kept; 0 Form D hits for the current universe, which is mostly public or late-stage companies) |
+| funding and launch news mentions | **Dropped for v1** | [GDELT DOC 2.0 API](https://blog.gdeltproject.org/gdelt-doc-2-0-api-debuts/): two live pulls (5 s, then ≥10 s spacing with backoff) got 429 on about half the queries and empty results on the rest. The module stays and runs only with `--only news_gdelt` |
 | HN mentions of company + Figma | **Real** | [HN Algolia API](https://hn.algolia.com/api) |
-| employee count, industry, HQ country, website | **Real** (Wikidata, else a manual snippet, else NULL) | [Wikidata](https://www.wikidata.org/) API + SPARQL; `seeds/manual_snippets.csv` |
+| employee count, industry, HQ country, website | **Real** (Wikidata, else hand-entered with a public source, else NULL) | [Wikidata](https://www.wikidata.org/) `Special:EntityData/<QID>.json` for hand-mapped QIDs (robots.txt disallows `/w/api.php` and `query.wikidata.org/sparql`); `seeds/manual_employees.csv` (`source=manual_public`: 10-K, annual report or the company's own page) |
 | contact role titles | **Real** (titles only) | Customer-story speaker titles (`seeds/story_contacts.csv`), manual snippets, or "Hiring team for: <role>" from the account's own job post |
 | paid seats, active seats, daily Make and agent events | **Synthetic proxy** | `signals/proxy.py`, seeded from real signal dates |
 | Figma agent first-use date | **Synthetic proxy** (gated by real Make/AI evidence) | `signals/proxy.py` |
@@ -41,6 +41,7 @@ The accounts are real public companies that appear in Figma's own [customer stor
   rate-limits per host (1 req/s default, GDELT 1 per 5 s, SEC ≤ 5/s, robots Crawl-delay honoured), retries 429/5xx with backoff,
   records 403s and **never** retries them with different headers.
 - **Honest User-Agent:** `usage-signals-agent/0.1 (+https://github.com/andydabinett/usage-signals-agent; $CONTACT_EMAIL)`. No browser spoofing.
+  For `*.sec.gov` only, `SEC_USER_AGENT` (env, e.g. `Your Name you@example.com`) supplies SEC's documented "Name email" format; the repo-URL form got 403 "Undeclared Automated Tool".
 - **No figma.com access by code** ([AUP §j](https://www.figma.com/aup/)) and **no linkedin.com access** of any kind. Both are on a hard
   denylist that raises before any I/O (including redirects). Figma Community signals are dropped from v1.
 - **No personal data.** No person names, emails, phones or profile URLs are stored; emails inside raw API bodies are redacted to `[email]`.

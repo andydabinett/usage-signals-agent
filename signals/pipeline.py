@@ -9,9 +9,12 @@ from .http import PoliteClient
 from .ingest import MODULES
 from . import proxy
 
-ORDER = ["figma_customers_seed", "jobs_greenhouse", "jobs_lever", "jobs_ashby", "enrich_wikidata", "manual_snippets",
-         "enrich_website", "funding_edgar", "news_gdelt", "mentions_hn"]
-assert set(ORDER) == set(MODULES)
+ORDER = ["figma_customers_seed", "jobs_greenhouse", "jobs_lever", "jobs_ashby", "enrich_wikidata", "manual_snippets", "manual_employees",
+         "enrich_website", "funding_edgar", "mentions_hn"]
+# news_gdelt is DROPPED for v1: the Oct 10 re-pull at >=10 s spacing still got 9x 429 and 11 empty responses.
+# The module and its tests stay; run it explicitly with `signals refresh --only news_gdelt`.
+OPTIONAL = ["news_gdelt"]
+assert set(ORDER) | set(OPTIONAL) == set(MODULES)
 
 
 def derive_contacts(wh) -> int:
@@ -33,7 +36,9 @@ def refresh(wh, as_of: dt.date, only: str | None = None, since: dt.date | None =
             client: PoliteClient | None = None, log=print, seeds_dir=None) -> dict:
     client = client or PoliteClient(wh=wh, contact_email=contact_email, log=log)
     counts = {}
-    for name in ORDER:
+    for name in ORDER + OPTIONAL:
+        if name in OPTIONAL and only != name:
+            continue
         if only and name not in (only, "figma_customers_seed"):
             continue
         mod = importlib.import_module(f"signals.ingest.{name}")

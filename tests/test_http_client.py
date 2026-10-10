@@ -86,3 +86,24 @@ def test_redirect_into_denylist_blocked():
         r.get("https://hop.test/x").mock(return_value=httpx.Response(302, headers={"location": "https://www.figma.com/"}))
         with pytest.raises(ForbiddenHost):
             make_client().get("https://hop.test/x")
+
+
+def test_wikidata_robots_entitydata_allowed_api_disallowed():
+    from conftest import HTTP
+    rb = Robots.parse((HTTP / "wikidata_robots.txt").read_text())
+    assert rb.allowed("https://www.wikidata.org/wiki/Special:EntityData/Q2.json")
+    assert not rb.allowed("https://www.wikidata.org/wiki/Special:EntityData/Q2")
+    assert not rb.allowed("https://www.wikidata.org/w/api.php?action=wbsearchentities&search=x")
+    assert not rb.allowed("https://www.wikidata.org/wiki/Special:Search")
+
+
+def test_sec_user_agent_override_only_for_sec(monkeypatch):
+    monkeypatch.setenv("SEC_USER_AGENT", "Test Person test@example.com")
+    with respx.mock(assert_all_called=False) as r:
+        r.get(url__regex=r".*/robots\.txt$").mock(return_value=httpx.Response(404))
+        sec = r.get("https://efts.sec.gov/x").mock(return_value=httpx.Response(200, json={}))
+        other = r.get("https://ua.test/x").mock(return_value=httpx.Response(200))
+        c = make_client()
+        c.get("https://efts.sec.gov/x"); c.get("https://ua.test/x")
+        assert sec.calls[0].request.headers["user-agent"] == "Test Person test@example.com"
+        assert "usage-signals-agent" in other.calls[0].request.headers["user-agent"]
