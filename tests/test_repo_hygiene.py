@@ -22,7 +22,7 @@ def test_env_gitignored():
 
 def test_readme_sections():
     r = (ROOT / "README.md").read_text()
-    for field in ("account name", "open roles", "hiring velocity", "last funding", "news mentions", "HN mentions", "employee count",
+    for field in ("account name", "open roles", "hiring momentum", "last funding", "news mentions", "HN mentions", "employee count",
                   "contact role titles", "paid seats", "first-use date", "owner_rep"):
         assert field in r, field
     assert "## Why this, for this role" in r and "](https://boards.greenhouse.io/figma/jobs/6013495004)" in r

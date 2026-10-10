@@ -273,7 +273,7 @@ Unchanged from v1: the `Warehouse` protocol (`query`, `execute`, `load_rows`, `c
     A unit test with an invented "35%" or an uncited sentence asserts it's rejected.
 14. The offline demo commands (`score`, `explain`, `handoff`, `web`) complete with no `OPENROUTER_API_KEY` and no network.
 15. `out/index.html` is self-contained, shows the snapshot date, and visually separates proxy from real.
-16. `grep -r "sk-or-"` across the repo, snapshot and out finds nothing, and `.env` is gitignored.
+16. a grep for the OpenRouter key prefix across the repo, snapshot and out finds nothing, and `.env` is gitignored.
 17. The README contains the §4 table with a source per field, the §12 why-section with clickable links, and the paid options section.
 
 ## 14. Paid options (needs Andy's approval; none signed up for)
